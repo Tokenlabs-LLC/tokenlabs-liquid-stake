@@ -1,0 +1,11 @@
+[package]
+name = "tokenlabs_liquid_stake"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+Iota = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "mainnet" }
+IotaSystem = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-system", rev = "mainnet" }
+
+[addresses]
+tokenlabs_liquid_stake = "0x0"
