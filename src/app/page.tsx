@@ -95,17 +95,14 @@ export default function Home() {
           <PoolStats />
         </div>
 
-        {/* Main Grid: Staking Panel + Protocol Stakes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fadeInUp stagger-2 items-stretch">
-          {/* Staking Panel */}
-          <div className="min-h-[400px]">
-            <StakingPanel />
-          </div>
+        {/* Staking Panel - Full width */}
+        <div className="mb-4 animate-fadeInUp stagger-2">
+          <StakingPanel />
+        </div>
 
-          {/* Protocol Stakes */}
-          <div className="min-h-[400px]">
-            <ProtocolStakes />
-          </div>
+        {/* Protocol Stakes - Full width */}
+        <div className="animate-fadeInUp stagger-3">
+          <ProtocolStakes />
         </div>
 
         {/* Info Section (when not connected) */}

@@ -9,23 +9,29 @@ export function ProtocolStakes() {
   const { stakes, totalProtocolStake, isLoading, error } = useProtocolStakes();
   const { validators: allValidators } = useValidators();
 
-  // Create a map of validator addresses to names
-  const validatorNames = new Map<string, string>();
+  // Create a map of validator addresses to names and images
+  const validatorData = new Map<string, { name: string; imageUrl?: string }>();
 
   // Add default validators
   for (const v of DEFAULT_VALIDATORS) {
-    validatorNames.set(v.address.toLowerCase(), v.name);
+    validatorData.set(v.address.toLowerCase(), { name: v.name });
   }
 
-  // Add from system validators
+  // Add from system validators (with images)
   for (const v of allValidators) {
-    if (!validatorNames.has(v.address.toLowerCase())) {
-      validatorNames.set(v.address.toLowerCase(), v.name);
-    }
+    const existing = validatorData.get(v.address.toLowerCase());
+    validatorData.set(v.address.toLowerCase(), {
+      name: existing?.name || v.name,
+      imageUrl: v.imageUrl,
+    });
   }
 
   const getValidatorName = (address: string) => {
-    return validatorNames.get(address.toLowerCase()) || truncateAddress(address, 6);
+    return validatorData.get(address.toLowerCase())?.name || truncateAddress(address, 6);
+  };
+
+  const getValidatorImage = (address: string) => {
+    return validatorData.get(address.toLowerCase())?.imageUrl;
   };
 
   const isDefaultValidator = (address: string) => {
@@ -64,7 +70,7 @@ export function ProtocolStakes() {
   const validatorsWithoutStake = stakes.filter((s) => s.totalStaked === 0n);
 
   return (
-    <div className="glass-card p-5 h-full flex flex-col">
+    <div className="glass-card p-5 flex flex-col max-h-[400px]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-display font-semibold text-sm text-[var(--text-primary)]">
@@ -107,6 +113,20 @@ export function ProtocolStakes() {
                 {/* Content */}
                 <div className="relative flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    {/* Validator Icon */}
+                    {getValidatorImage(stake.address) ? (
+                      <img
+                        src={getValidatorImage(stake.address)}
+                        alt={getValidatorName(stake.address)}
+                        className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/30 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[9px] font-bold text-[var(--accent-primary)]">
+                          {getValidatorName(stake.address).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                     <span className="font-medium text-sm text-[var(--text-primary)]">
                       {getValidatorName(stake.address)}
                     </span>
@@ -156,6 +176,20 @@ export function ProtocolStakes() {
                   className="flex items-center justify-between py-1.5 px-2 rounded bg-[var(--bg-card-solid)]/30 text-[var(--text-muted)]"
                 >
                   <div className="flex items-center gap-1.5">
+                    {/* Validator Icon */}
+                    {getValidatorImage(stake.address) ? (
+                      <img
+                        src={getValidatorImage(stake.address)}
+                        alt={getValidatorName(stake.address)}
+                        className="w-4 h-4 rounded-full object-cover flex-shrink-0 opacity-60"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-[var(--text-muted)]/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[7px] font-bold text-[var(--text-muted)]">
+                          {getValidatorName(stake.address).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                     <span className="text-xs">
                       {getValidatorName(stake.address)}
                     </span>

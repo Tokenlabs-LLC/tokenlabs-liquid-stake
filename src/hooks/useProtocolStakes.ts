@@ -7,6 +7,7 @@ import { POOL_ID } from "@/lib/constants";
 export interface ValidatorStake {
   address: string;
   totalStaked: bigint;
+  priority: number;
 }
 
 export function useProtocolStakes() {
@@ -35,14 +36,19 @@ export function useProtocolStakes() {
 
       // Get validators from the sorted_validators vector or validators map
       const validatorsContents = validatorSetFields.validators?.fields?.contents || [];
-      const validatorAddresses: string[] = [];
+      const validatorData: Map<string, { priority: number; order: number }> = new Map();
 
+      let order = 0;
       for (const entry of validatorsContents) {
         const address = entry?.fields?.key;
+        const priority = parseInt(entry?.fields?.value || "0");
         if (address) {
-          validatorAddresses.push(address);
+          // Normalize address to lowercase for consistent matching
+          validatorData.set(address.toLowerCase(), { priority, order: order++ });
         }
       }
+
+      const validatorAddresses = Array.from(validatorData.keys());
 
       // Get the vaults table ID
       const vaultsTableId = validatorSetFields.vaults?.fields?.id?.id;
@@ -51,6 +57,7 @@ export function useProtocolStakes() {
         return validatorAddresses.map((address) => ({
           address,
           totalStaked: 0n,
+          priority: validatorData.get(address)?.priority ?? 0,
         }));
       }
 
@@ -91,8 +98,9 @@ export function useProtocolStakes() {
             stakes.push({
               address: validatorAddress,
               totalStaked,
+              priority: validatorData.get(validatorAddress.toLowerCase())?.priority ?? 0,
             });
-            foundAddresses.add(validatorAddress);
+            foundAddresses.add(validatorAddress.toLowerCase());
           }
         } catch (e) {
           console.error("Error fetching vault:", e);
@@ -101,17 +109,29 @@ export function useProtocolStakes() {
 
       // Add validators without vaults (0 stake)
       for (const addr of validatorAddresses) {
-        if (!foundAddresses.has(addr)) {
+        if (!foundAddresses.has(addr.toLowerCase())) {
           stakes.push({
             address: addr,
             totalStaked: 0n,
+            priority: validatorData.get(addr.toLowerCase())?.priority ?? 0,
           });
         }
       }
 
-      // Sort by stake (descending)
+      // Sort by priority (descending), then by registration order (ascending)
       stakes.sort((a, b) => {
-        return b.totalStaked > a.totalStaked ? 1 : b.totalStaked < a.totalStaked ? -1 : 0;
+        const priorityA = a.priority;
+        const priorityB = b.priority;
+
+        // First sort by priority (higher first)
+        if (priorityA !== priorityB) {
+          return priorityB - priorityA;
+        }
+
+        // Then by registration order (earlier first)
+        const orderA = validatorData.get(a.address.toLowerCase())?.order ?? 999;
+        const orderB = validatorData.get(b.address.toLowerCase())?.order ?? 999;
+        return orderA - orderB;
       });
 
       return stakes;

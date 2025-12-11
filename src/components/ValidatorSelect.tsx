@@ -12,6 +12,8 @@ interface ValidatorSelectProps {
   onModeChange: (mode: "auto" | "manual") => void;
 }
 
+const MAX_VALIDATORS = 10;
+
 // Shuffle array using Fisher-Yates algorithm
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -45,9 +47,13 @@ export function ValidatorSelect({
     if (selectedValidators.includes(address)) {
       onSelectionChange(selectedValidators.filter((v) => v !== address));
     } else {
+      // Don't allow more than MAX_VALIDATORS
+      if (selectedValidators.length >= MAX_VALIDATORS) return;
       onSelectionChange([...selectedValidators, address]);
     }
   };
+
+  const isAtLimit = selectedValidators.length >= MAX_VALIDATORS;
 
   // Sort validators: default validators first, then rest shuffled (only once)
   const sortedValidators = useMemo(() => {
@@ -114,12 +120,25 @@ export function ValidatorSelect({
       {/* Auto Mode */}
       {mode === "auto" && (
         <div className="flex flex-wrap gap-2">
-          {DEFAULT_VALIDATORS.map((v) => (
-            <div key={v.address} className="stat-chip">
-              <div className="status-dot !w-2 !h-2" />
-              <span className="value">{v.name}</span>
-            </div>
-          ))}
+          {DEFAULT_VALIDATORS.map((v) => {
+            const validatorData = validators.find(
+              (val) => val.address.toLowerCase() === v.address.toLowerCase()
+            );
+            return (
+              <div key={v.address} className="stat-chip">
+                {validatorData?.imageUrl ? (
+                  <img
+                    src={validatorData.imageUrl}
+                    alt={v.name}
+                    className="w-4 h-4 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="status-dot !w-2 !h-2" />
+                )}
+                <span className="value">{v.name}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -135,8 +154,8 @@ export function ValidatorSelect({
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-glass text-sm !py-2.5 !px-3 flex-1"
             />
-            <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">
-              {selectedValidators.length} sel.
+            <span className={`text-xs whitespace-nowrap ${isAtLimit ? "text-amber-400" : "text-[var(--text-muted)]"}`}>
+              {selectedValidators.length}/{MAX_VALIDATORS}
             </span>
             {selectedValidators.length > 0 && (
               <button
@@ -164,18 +183,21 @@ export function ValidatorSelect({
                 {filteredValidators.map((validator) => {
                   const isSelected = selectedValidators.includes(validator.address);
                   const isDefault = isDefaultValidator(validator.address);
+                  const isDisabled = !isSelected && isAtLimit;
 
                   return (
                     <button
                       key={validator.address}
                       type="button"
                       onClick={() => toggleValidator(validator.address)}
-                      className={`validator-card-compact flex items-center gap-2 ${
+                      disabled={isDisabled}
+                      className={`validator-card-compact flex items-center gap-1.5 ${
                         isSelected ? "selected" : ""
-                      }`}
+                      } ${isDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
                     >
+                      {/* Checkbox */}
                       <div
-                        className={`w-3.5 h-3.5 rounded flex-shrink-0 border-2 flex items-center justify-center ${
+                        className={`w-3 h-3 rounded flex-shrink-0 border-2 flex items-center justify-center ${
                           isSelected
                             ? "bg-[var(--accent-primary)] border-[var(--accent-primary)]"
                             : "border-[var(--text-muted)]"
@@ -187,11 +209,27 @@ export function ValidatorSelect({
                           </svg>
                         )}
                       </div>
-                      <span className="font-medium text-[var(--text-primary)] text-xs truncate">
+                      {/* Validator Icon */}
+                      {validator.imageUrl ? (
+                        <img
+                          src={validator.imageUrl}
+                          alt={validator.name}
+                          className="w-4 h-4 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-[var(--accent-primary)]/30 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[8px] font-bold text-[var(--accent-primary)]">
+                            {validator.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      {/* Name */}
+                      <span className="font-medium text-[var(--text-primary)] text-xs truncate flex-1">
                         {validator.name}
                       </span>
+                      {/* Default badge */}
                       {isDefault && (
-                        <span className="text-[8px] px-1 rounded bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] font-medium flex-shrink-0">
+                        <span className="text-[7px] px-0.5 rounded bg-[var(--accent-primary)]/20 text-[var(--accent-primary)] font-medium flex-shrink-0">
                           ★
                         </span>
                       )}

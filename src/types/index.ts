@@ -18,6 +18,7 @@ export interface PoolState {
 export interface ValidatorInfo {
   name: string;
   address: string;
+  imageUrl?: string;
   priority?: number;
   apy?: number;
   totalStake?: bigint;

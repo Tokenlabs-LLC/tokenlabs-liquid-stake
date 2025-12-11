@@ -381,47 +381,81 @@ export function StakingPanel() {
         {/* Transaction Status */}
         {txStatus.type && (
           <div
-            className={`mt-4 p-3 rounded-lg border ${
+            className={`mt-4 p-4 rounded-xl border relative overflow-hidden ${
               txStatus.type === "success"
-                ? "bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/30 text-[var(--accent-primary)]"
+                ? "bg-emerald-500/10 border-emerald-500/30"
                 : txStatus.type === "error"
-                ? "bg-red-500/10 border-red-500/30 text-red-400"
-                : "bg-[var(--accent-secondary)]/10 border-[var(--accent-secondary)]/30 text-[var(--accent-secondary)]"
+                ? "bg-red-500/10 border-red-500/30"
+                : "bg-[var(--accent-secondary)]/10 border-[var(--accent-secondary)]/30"
             }`}
           >
-            <div className="flex items-center gap-2">
-              {txStatus.type === "success" && (
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-              {txStatus.type === "error" && (
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              )}
-              {txStatus.type === "pending" && (
-                <svg className="animate-spin w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
+            {/* Background glow */}
+            <div className={`absolute inset-0 opacity-20 ${
+              txStatus.type === "success" ? "bg-gradient-to-r from-emerald-500/20 to-transparent" :
+              txStatus.type === "error" ? "bg-gradient-to-r from-red-500/20 to-transparent" :
+              "bg-gradient-to-r from-[var(--accent-secondary)]/20 to-transparent"
+            }`} />
+
+            <div className="relative flex items-start gap-3">
+              {/* Icon */}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                txStatus.type === "success" ? "bg-emerald-500/20" :
+                txStatus.type === "error" ? "bg-red-500/20" :
+                "bg-[var(--accent-secondary)]/20"
+              }`}>
+                {txStatus.type === "success" && (
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {txStatus.type === "error" && (
+                  <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+                {txStatus.type === "pending" && (
+                  <svg className="animate-spin w-4 h-4 text-[var(--accent-secondary)]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Content */}
               <div className="flex-1 min-w-0">
-                <span className="text-xs">{txStatus.message}</span>
+                <p className={`font-medium text-sm ${
+                  txStatus.type === "success" ? "text-emerald-400" :
+                  txStatus.type === "error" ? "text-red-400" :
+                  "text-[var(--accent-secondary)]"
+                }`}>
+                  {txStatus.message}
+                </p>
                 {txStatus.txDigest && (
                   <a
                     href={`${EXPLORER_URL}/${txStatus.txDigest}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 mt-1 text-xs hover:underline opacity-80 hover:opacity-100 transition-opacity"
+                    className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
                   >
-                    <span className="mono truncate">{txStatus.txDigest}</span>
-                    <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <span className="mono text-xs text-[var(--text-secondary)] group-hover:text-white transition-colors">
+                      {txStatus.txDigest.slice(0, 8)}...{txStatus.txDigest.slice(-6)}
+                    </span>
+                    <svg className="w-3 h-3 text-[var(--text-muted)] group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
                   </a>
                 )}
               </div>
+
+              {/* Close button */}
+              <button
+                onClick={() => setTxStatus({ type: null, message: "" })}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
         )}

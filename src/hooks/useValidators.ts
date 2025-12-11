@@ -15,6 +15,7 @@ export function useValidators() {
     validators = data.activeValidators.map((v) => ({
       name: v.name || "Unknown",
       address: v.iotaAddress,
+      imageUrl: v.imageUrl || undefined,
       apy: v.stakingPoolIotaBalance ? parseFloat(v.stakingPoolIotaBalance) : undefined,
       totalStake: BigInt(v.stakingPoolIotaBalance || "0"),
     }));

@@ -16,13 +16,32 @@ import {
   buildTransferOwnerCapTx,
   buildTransferOperatorCapTx,
 } from "@/lib/transactions";
-import { formatIota, parseIota, formatPercent, formatRelativeTime } from "@/lib/utils";
+import { formatIota, parseIota, formatPercent, formatRelativeTime, truncateAddress } from "@/lib/utils";
+import { useProtocolStakes } from "@/hooks/useProtocolStakes";
+import { useValidators } from "@/hooks/useValidators";
 
 export function AdminPanel() {
   const account = useCurrentAccount();
   const { hasOwnerCap, hasOperatorCap, ownerCapId, operatorCapId, isLoading: capsLoading } = useAdminCaps();
   const { poolState, refetch: refetchPool } = usePoolData();
+  const { stakes: protocolStakes, totalProtocolStake } = useProtocolStakes();
+  const { validators: systemValidators } = useValidators();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+
+  // Create validator name map
+  const getValidatorName = (address: string) => {
+    const validator = systemValidators.find(
+      (v) => v.address.toLowerCase() === address.toLowerCase()
+    );
+    return validator?.name || truncateAddress(address, 6);
+  };
+
+  const getValidatorImage = (address: string) => {
+    const validator = systemValidators.find(
+      (v) => v.address.toLowerCase() === address.toLowerCase()
+    );
+    return validator?.imageUrl;
+  };
 
   // Owner form state
   const [minStake, setMinStake] = useState("");
@@ -110,6 +129,137 @@ export function AdminPanel() {
       </div>
 
       <div className="p-6 space-y-8">
+        {/* Protocol Validators Overview */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-gray-200">Protocol Validators</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Validators registered in the protocol with their stake and priority
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Total Staked</p>
+              <p className="text-lg font-semibold text-blue-400">{formatIota(totalProtocolStake)} IOTA</p>
+            </div>
+          </div>
+
+          {protocolStakes.length === 0 ? (
+            <div className="p-4 bg-gray-800/30 rounded-lg text-center text-gray-500 text-sm">
+              No validators registered
+            </div>
+          ) : (
+            <div className="bg-gray-800/30 rounded-lg overflow-hidden">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium uppercase tracking-wider">
+                <div className="col-span-3">Validator</div>
+                <div className="col-span-3">Address</div>
+                <div className="col-span-2 text-right">Staked</div>
+                <div className="col-span-2 text-center">Priority</div>
+                <div className="col-span-2 text-center">Status</div>
+              </div>
+
+              {/* Table Body */}
+              <div className="divide-y divide-gray-800/50 max-h-64 overflow-y-auto">
+                {protocolStakes.map((stake) => {
+                  const isBanned = stake.priority === 0;
+                  const isHighPriority = stake.priority >= 100;
+
+                  return (
+                    <div
+                      key={stake.address}
+                      className={`grid grid-cols-12 gap-2 px-4 py-3 items-center ${
+                        isBanned ? "bg-red-900/10" : ""
+                      }`}
+                    >
+                      {/* Validator */}
+                      <div className="col-span-3 flex items-center gap-2 min-w-0">
+                        {getValidatorImage(stake.address) ? (
+                          <img
+                            src={getValidatorImage(stake.address)}
+                            alt=""
+                            className="w-6 h-6 rounded-full flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-bold text-gray-400">
+                              {getValidatorName(stake.address).charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <span className="text-sm text-gray-200 truncate">
+                          {getValidatorName(stake.address)}
+                        </span>
+                      </div>
+
+                      {/* Address */}
+                      <div className="col-span-3 flex items-center gap-1">
+                        <span className="text-xs text-gray-500 mono">
+                          {stake.address.slice(0, 6)}...{stake.address.slice(-4)}
+                        </span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(stake.address);
+                            setTxStatus({ type: "success", message: "Address copied!" });
+                            setTimeout(() => setTxStatus({ type: null, message: "" }), 2000);
+                          }}
+                          className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors"
+                          title="Copy address"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Staked */}
+                      <div className="col-span-2 text-right">
+                        <span className="text-sm font-medium text-gray-300 mono">
+                          {formatIota(stake.totalStaked)}
+                        </span>
+                      </div>
+
+                      {/* Priority */}
+                      <div className="col-span-2 text-center">
+                        <span
+                          className={`inline-flex items-center justify-center w-10 h-6 rounded text-xs font-bold ${
+                            isBanned
+                              ? "bg-red-900/50 text-red-400"
+                              : isHighPriority
+                              ? "bg-green-900/50 text-green-400"
+                              : "bg-gray-700 text-gray-300"
+                          }`}
+                        >
+                          {stake.priority}
+                        </span>
+                      </div>
+
+                      {/* Status */}
+                      <div className="col-span-2 text-center">
+                        {isBanned ? (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-900/30 text-red-400">
+                            Banned
+                          </span>
+                        ) : stake.totalStaked > 0n ? (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-400">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">
+                            No stake
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-800" />
+
         {/* Owner Functions */}
         {hasOwnerCap && ownerCapId && (
           <div className="space-y-6">
