@@ -2,15 +2,11 @@
 // Tokenlabs Liquid Stake - CERT Token (tIOTA)
 
 module tokenlabs_liquid_stake::cert {
-    use std::option::{Self};
     use iota::url::{Self, Url};
     use iota::coin::{Self, Coin};
     use iota::balance::{Self, Supply, Balance};
-    use iota::transfer;
-    use iota::tx_context::{TxContext};
-    use iota::object::{Self, UID};
     use iota::event;
-    use tokenlabs_liquid_stake::ownership::{OwnerCap};
+    use tokenlabs_liquid_stake::ownership::OwnerCap;
 
     // Constants
     const VERSION: u64 = 1;

@@ -6,10 +6,7 @@ module tokenlabs_liquid_stake::native_pool {
     use iota::clock::{Self, Clock};
     use iota::coin::{Self, Coin};
     use iota::event;
-    use iota::iota::{IOTA};
-    use iota::object::{Self, UID};
-    use iota::transfer;
-    use iota::tx_context::{Self, TxContext};
+    use iota::iota::IOTA;
     use iota_system::iota_system::{Self, IotaSystemState};
     use tokenlabs_liquid_stake::cert::{Self, CERT, Metadata};
     use tokenlabs_liquid_stake::math;
@@ -136,7 +133,7 @@ module tokenlabs_liquid_stake::native_pool {
             validator_set: validator_set::create(ctx),
             total_staked: 0,
             staked_update_epoch: 0,
-            base_reward_fee: 1000, // 10.00%
+            base_reward_fee: 500, // 5.00%
             version: VERSION,
             paused: false,
             min_stake: ONE_IOTA,

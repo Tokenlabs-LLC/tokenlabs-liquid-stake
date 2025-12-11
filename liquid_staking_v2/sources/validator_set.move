@@ -2,14 +2,11 @@
 // Tokenlabs Liquid Stake - Validator Set Management
 
 module tokenlabs_liquid_stake::validator_set {
-    use std::vector;
-    use iota::object::{Self, UID};
     use iota::vec_map::{Self, VecMap};
-    use iota::tx_context::{Self, TxContext};
     use iota::object_table::{Self, ObjectTable};
     use iota::table::{Self, Table};
-    use iota::iota::{IOTA};
-    use iota_system::iota_system::{Self, IotaSystemState};
+    use iota::iota::IOTA;
+    use iota_system::iota_system::{Self as iota_system, IotaSystemState};
     use iota::event;
     use iota::balance::{Self, Balance};
     use iota_system::staking_pool::{Self, StakedIota};
@@ -20,8 +17,10 @@ module tokenlabs_liquid_stake::validator_set {
     // Errors
     const E_NO_VALIDATORS: u64 = 300;
     const E_MISMATCHED_LENGTHS: u64 = 301;
-    const E_NO_PRIORITY: u64 = 302;
+    const E_VAULT_NOT_EMPTY: u64 = 302;
+    const E_VALIDATOR_NOT_FOUND: u64 = 303;
     const E_TOO_MANY_VLDRS: u64 = 304;
+    const E_VALIDATOR_BANNED: u64 = 305;
 
     /* Events */
     public struct ValidatorPriorUpdated has copy, drop {
@@ -161,6 +160,7 @@ module tokenlabs_liquid_stake::validator_set {
 
     /// Ensures a validator exists in the set. If not, adds it with the given default priority.
     /// If the validator already exists, does NOT change its priority.
+    /// If the validator exists with priority 0 (banned), aborts with E_VALIDATOR_BANNED.
     /// Used by stake_to_validators() to add user-chosen validators with priority 50.
     public(package) fun ensure_validator_exists(
         self: &mut ValidatorSet,
@@ -168,13 +168,17 @@ module tokenlabs_liquid_stake::validator_set {
         default_priority: u64
     ) {
         if (!vec_map::contains(&self.validators, &validator)) {
+            // New validator: add with default priority
             vec_map::insert(&mut self.validators, validator, default_priority);
             vector::push_back(&mut self.sorted_validators, validator);
             sort_validators_internal(self);
 
             event::emit(ValidatorPriorUpdated { validator, priority: default_priority });
+        } else {
+            // Existing validator: check if banned (priority 0)
+            let priority = *vec_map::get(&self.validators, &validator);
+            assert!(priority > 0, E_VALIDATOR_BANNED);
         };
-        // If validator already exists, do NOT change its priority
     }
 
     fun sort_validators_internal(self: &mut ValidatorSet) {
@@ -202,49 +206,44 @@ module tokenlabs_liquid_stake::validator_set {
         };
     }
 
+    /// Add stake to validator vault using sequential index
     public(package) fun add_stake(self: &mut ValidatorSet, validator: address, staked: StakedIota, ctx: &mut TxContext) {
         let stake_value = staking_pool::staked_iota_amount(&staked);
         let current_epoch = tx_context::epoch(ctx);
 
         if (!table::contains(&self.vaults, validator)) {
-            let vault = Vault {
+            let mut vault = Vault {
                 id: object::new(ctx),
                 stakes: object_table::new<u64, StakedIota>(ctx),
-                total_staked: 0,
+                total_staked: stake_value,
                 stake_epoch: current_epoch,
-                staked_in_epoch: 0,
+                staked_in_epoch: stake_value,
             };
+            // Use sequential index (0) for first stake
+            let idx = object_table::length(&vault.stakes);
+            object_table::add(&mut vault.stakes, idx, staked);
             table::add(&mut self.vaults, validator, vault);
-        };
-
-        let vault = table::borrow_mut(&mut self.vaults, validator);
-
-        // Track staked in epoch
-        if (vault.stake_epoch != current_epoch) {
-            vault.stake_epoch = current_epoch;
-            vault.staked_in_epoch = 0;
-        };
-        vault.staked_in_epoch = vault.staked_in_epoch + stake_value;
-        vault.total_staked = vault.total_staked + stake_value;
-
-        // Add to stakes table using activation epoch as key
-        let activation_epoch = staking_pool::stake_activation_epoch(&staked);
-        if (object_table::contains(&vault.stakes, activation_epoch)) {
-            // Merge stakes from same epoch
-            let existing = object_table::remove(&mut vault.stakes, activation_epoch);
-            let merged = merge_staked_iota(existing, staked, ctx);
-            object_table::add(&mut vault.stakes, activation_epoch, merged);
         } else {
-            object_table::add(&mut vault.stakes, activation_epoch, staked);
+            let vault = table::borrow_mut(&mut self.vaults, validator);
+
+            // Track staked in epoch
+            if (vault.stake_epoch != current_epoch) {
+                vault.stake_epoch = current_epoch;
+                vault.staked_in_epoch = stake_value;
+            } else {
+                vault.staked_in_epoch = vault.staked_in_epoch + stake_value;
+            };
+            vault.total_staked = vault.total_staked + stake_value;
+
+            // Use sequential index for new stake
+            let idx = object_table::length(&vault.stakes);
+            object_table::add(&mut vault.stakes, idx, staked);
         };
     }
 
-    fun merge_staked_iota(mut a: StakedIota, b: StakedIota, _ctx: &mut TxContext): StakedIota {
-        // Use the framework's join function to merge staked IOTA
-        staking_pool::join_staked_iota(&mut a, b);
-        a
-    }
-
+    /// Remove stakes from validator vault using LIFO order
+    /// Iterates backwards from the last stake to first
+    /// Includes cleanup logic: if vault is empty and validator has priority 0, destroys vault and removes validator
     public(package) fun remove_stakes(
         self: &mut ValidatorSet,
         wrapper: &mut IotaSystemState,
@@ -252,56 +251,115 @@ module tokenlabs_liquid_stake::validator_set {
         amount: u64,
         ctx: &mut TxContext
     ): (Balance<IOTA>, u64, u64) {
-        if (!table::contains(&self.vaults, validator)) {
-            return (balance::zero<IOTA>(), 0, 0)
-        };
-
-        let vault = table::borrow_mut(&mut self.vaults, validator);
         let mut total_removed = balance::zero<IOTA>();
         let mut total_principals: u64 = 0;
-        let mut total_rewards: u64 = 0;
-        let mut removed_amount: u64 = 0;
 
-        // Get all epochs from the stake table
-        let current_epoch = tx_context::epoch(ctx);
-
-        // Iterate over stakes and remove until we have enough
-        // Since we can't iterate ObjectTable directly, we try epochs from 0 to current
-        let mut epoch = 0;
-        while (removed_amount < amount && epoch <= current_epoch) {
-            if (object_table::contains(&vault.stakes, epoch)) {
-                let staked = object_table::remove(&mut vault.stakes, epoch);
-                let principal = staking_pool::staked_iota_amount(&staked);
-
-                let withdrawn = iota_system::request_withdraw_stake_non_entry(wrapper, staked, ctx);
-                let withdrawn_value = balance::value(&withdrawn);
-
-                let rewards = if (withdrawn_value > principal) {
-                    withdrawn_value - principal
-                } else {
-                    0
-                };
-
-                total_principals = total_principals + principal;
-                total_rewards = total_rewards + rewards;
-                removed_amount = removed_amount + withdrawn_value;
-
-                balance::join(&mut total_removed, withdrawn);
-
-                if (removed_amount >= amount) {
-                    break
+        // Early check: if no vault exists
+        if (!table::contains(&self.vaults, validator)) {
+            // Cleanup: if validator has priority 0 and no vault, remove from lists
+            if (vec_map::contains(&self.validators, &validator)) {
+                let priority = *vec_map::get(&self.validators, &validator);
+                if (priority == 0) {
+                    remove_validator_from_lists(self, validator);
                 };
             };
-            epoch = epoch + 1;
+            return (total_removed, 0, 0)
         };
 
-        vault.total_staked = if (vault.total_staked >= total_principals) {
-            vault.total_staked - total_principals
+        // Scope for mutable vault borrow
+        {
+            let vault = table::borrow_mut(&mut self.vaults, validator);
+            let mut stakes_len = object_table::length(&vault.stakes);
+
+            // Iterate backwards (LIFO) until we have enough
+            while (stakes_len > 0 && balance::value(&total_removed) < amount) {
+                let idx = stakes_len - 1;
+                let staked_ref = object_table::borrow_mut(&mut vault.stakes, idx);
+                let principal = staking_pool::staked_iota_amount(staked_ref);
+
+                // Calculate how much more we need
+                let needed = amount - balance::value(&total_removed);
+                // Minimum stake is 1 IOTA
+                let min_stake = 1_000_000_000u64;
+                let actual_needed = if (needed < min_stake) { min_stake } else { needed };
+
+                // Check if we can split this stake
+                let staked_to_withdraw = if (principal > actual_needed && (principal - actual_needed) >= min_stake) {
+                    // Split: take only what we need, leave the rest
+                    staking_pool::split(staked_ref, actual_needed, ctx)
+                } else {
+                    // Remove entire stake
+                    let staked = object_table::remove(&mut vault.stakes, idx);
+                    stakes_len = stakes_len - 1;
+                    staked
+                };
+
+                let withdrawn_principal = staking_pool::staked_iota_amount(&staked_to_withdraw);
+                let withdrawn = iota_system::request_withdraw_stake_non_entry(wrapper, staked_to_withdraw, ctx);
+
+                total_principals = total_principals + withdrawn_principal;
+                balance::join(&mut total_removed, withdrawn);
+            };
+
+            // Update vault total_staked
+            vault.total_staked = if (vault.total_staked >= total_principals) {
+                vault.total_staked - total_principals
+            } else {
+                0
+            };
+        }; // vault borrow ends here
+
+        // Calculate rewards (withdrawn amount - principals)
+        let total_rewards = if (balance::value(&total_removed) > total_principals) {
+            balance::value(&total_removed) - total_principals
         } else {
             0
         };
 
+        // Cleanup: if vault is empty and validator has priority 0, destroy vault and remove validator
+        let needs_cleanup = {
+            let vault = table::borrow(&self.vaults, validator);
+            let stakes_empty = object_table::length(&vault.stakes) == 0;
+            let no_total_staked = vault.total_staked == 0;
+            stakes_empty && no_total_staked
+        };
+
+        if (needs_cleanup) {
+            let priority = *vec_map::get(&self.validators, &validator);
+            if (priority == 0) {
+                let vault_to_destroy = table::remove(&mut self.vaults, validator);
+                destroy_vault(vault_to_destroy);
+                remove_validator_from_lists(self, validator);
+            };
+        };
+
         (total_removed, total_principals, total_rewards)
+    }
+
+    /// Destroys an empty vault
+    fun destroy_vault(vault: Vault) {
+        let Vault { id, stakes, total_staked: _, stake_epoch: _, staked_in_epoch: _ } = vault;
+        object::delete(id);
+        object_table::destroy_empty(stakes);
+    }
+
+    /// Removes a validator from the validators map and sorted_validators vector
+    fun remove_validator_from_lists(self: &mut ValidatorSet, validator: address) {
+        // Remove from validators map
+        if (vec_map::contains(&self.validators, &validator)) {
+            vec_map::remove(&mut self.validators, &validator);
+        };
+
+        // Remove from sorted_validators vector
+        let len = vector::length(&self.sorted_validators);
+        let mut i = 0;
+        while (i < len) {
+            if (*vector::borrow(&self.sorted_validators, i) == validator) {
+                vector::remove(&mut self.sorted_validators, i);
+                break
+            };
+            i = i + 1;
+        };
     }
 
     #[test_only]

@@ -3,9 +3,6 @@
 
 module tokenlabs_liquid_stake::ownership {
     use iota::event;
-    use iota::object::{Self, UID};
-    use iota::transfer;
-    use iota::tx_context::{Self, TxContext};
 
     // Errors
     const E_SAME_ADDRESS: u64 = 100;

@@ -323,10 +323,24 @@ EOF
     echo -e "${YELLOW}[3/4] Creando contenedor...${NC}"
     docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
+    # Mount both projects if they exist
+    IOTA_CONTRACTS_DIR="$HOME/Documentos/GitHub/iotaMoveContrats"
+    TOKENLABS_DIR="$HOME/Documentos/GitHub/tokenlabs-liquid-stake"
+
+    MOUNT_OPTS="-v $PROJECT_DIR:/workspaces/$(basename $PROJECT_DIR)"
+
+    # Add second mount if different directory exists
+    if [ -d "$IOTA_CONTRACTS_DIR" ] && [ "$PROJECT_DIR" != "$IOTA_CONTRACTS_DIR" ]; then
+        MOUNT_OPTS="$MOUNT_OPTS -v $IOTA_CONTRACTS_DIR:/workspaces/iotaMoveContrats"
+    fi
+    if [ -d "$TOKENLABS_DIR" ] && [ "$PROJECT_DIR" != "$TOKENLABS_DIR" ]; then
+        MOUNT_OPTS="$MOUNT_OPTS -v $TOKENLABS_DIR:/workspaces/tokenlabs-liquid-stake"
+    fi
+
     docker run -d \
         --name "$CONTAINER_NAME" \
-        -v "$PROJECT_DIR:/workspaces/iotaMoveContrats" \
-        -w /workspaces/iotaMoveContrats \
+        $MOUNT_OPTS \
+        -w /workspaces/$(basename $PROJECT_DIR) \
         --restart unless-stopped \
         "$IMAGE_NAME" \
         tail -f /dev/null
