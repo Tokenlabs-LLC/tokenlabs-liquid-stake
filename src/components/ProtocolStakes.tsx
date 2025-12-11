@@ -1,9 +1,47 @@
 "use client";
 
+import { useState } from "react";
 import { useProtocolStakes } from "@/hooks/useProtocolStakes";
 import { useValidators } from "@/hooks/useValidators";
 import { formatIota, truncateAddress } from "@/lib/utils";
 import { DEFAULT_VALIDATORS, IOTA_LOGO } from "@/lib/constants";
+
+// Avatar component with fallback
+function ValidatorAvatar({
+  imageUrl,
+  name,
+  size = "md",
+  muted = false
+}: {
+  imageUrl?: string;
+  name: string;
+  size?: "sm" | "md";
+  muted?: boolean;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const sizeClasses = size === "sm" ? "w-4 h-4 text-[7px]" : "w-5 h-5 text-[9px]";
+  const bgColor = muted ? "bg-[var(--text-muted)]/20" : "bg-[var(--accent-primary)]/30";
+  const textColor = muted ? "text-[var(--text-muted)]" : "text-[var(--accent-primary)]";
+
+  if (!imageUrl || hasError) {
+    return (
+      <div className={`${sizeClasses} rounded-full ${bgColor} flex items-center justify-center flex-shrink-0`}>
+        <span className={`font-bold ${textColor}`}>
+          {name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={name}
+      className={`${sizeClasses} rounded-full object-cover flex-shrink-0 ${muted ? "opacity-60" : ""}`}
+      onError={() => setHasError(true)}
+    />
+  );
+}
 
 export function ProtocolStakes() {
   const { stakes, totalProtocolStake, isLoading, error } = useProtocolStakes();
@@ -114,19 +152,10 @@ export function ProtocolStakes() {
                 <div className="relative flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {/* Validator Icon */}
-                    {getValidatorImage(stake.address) ? (
-                      <img
-                        src={getValidatorImage(stake.address)}
-                        alt={getValidatorName(stake.address)}
-                        className="w-5 h-5 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)]/30 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[9px] font-bold text-[var(--accent-primary)]">
-                          {getValidatorName(stake.address).charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                    <ValidatorAvatar
+                      imageUrl={getValidatorImage(stake.address)}
+                      name={getValidatorName(stake.address)}
+                    />
                     <span className="font-medium text-sm text-[var(--text-primary)]">
                       {getValidatorName(stake.address)}
                     </span>
@@ -177,19 +206,12 @@ export function ProtocolStakes() {
                 >
                   <div className="flex items-center gap-1.5">
                     {/* Validator Icon */}
-                    {getValidatorImage(stake.address) ? (
-                      <img
-                        src={getValidatorImage(stake.address)}
-                        alt={getValidatorName(stake.address)}
-                        className="w-4 h-4 rounded-full object-cover flex-shrink-0 opacity-60"
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-[var(--text-muted)]/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[7px] font-bold text-[var(--text-muted)]">
-                          {getValidatorName(stake.address).charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                    <ValidatorAvatar
+                      imageUrl={getValidatorImage(stake.address)}
+                      name={getValidatorName(stake.address)}
+                      size="sm"
+                      muted
+                    />
                     <span className="text-xs">
                       {getValidatorName(stake.address)}
                     </span>

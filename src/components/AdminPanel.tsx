@@ -4,6 +4,36 @@ import { useState } from "react";
 import { useSignAndExecuteTransaction, useCurrentAccount } from "@iota/dapp-kit";
 import { useAdminCaps } from "@/hooks/useAdmin";
 import { usePoolData } from "@/hooks/usePoolData";
+
+// Avatar component with fallback
+function ValidatorAvatar({
+  imageUrl,
+  name,
+}: {
+  imageUrl?: string;
+  name: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!imageUrl || hasError) {
+    return (
+      <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+        <span className="text-[10px] font-bold text-gray-400">
+          {name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={name}
+      className="w-6 h-6 rounded-full flex-shrink-0"
+      onError={() => setHasError(true)}
+    />
+  );
+}
 import {
   buildChangeMinStakeTx,
   buildChangeRewardFeeTx,
@@ -174,19 +204,10 @@ export function AdminPanel() {
                     >
                       {/* Validator */}
                       <div className="col-span-3 flex items-center gap-2 min-w-0">
-                        {getValidatorImage(stake.address) ? (
-                          <img
-                            src={getValidatorImage(stake.address)}
-                            alt=""
-                            className="w-6 h-6 rounded-full flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
-                            <span className="text-[10px] font-bold text-gray-400">
-                              {getValidatorName(stake.address).charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
+                        <ValidatorAvatar
+                          imageUrl={getValidatorImage(stake.address)}
+                          name={getValidatorName(stake.address)}
+                        />
                         <span className="text-sm text-gray-200 truncate">
                           {getValidatorName(stake.address)}
                         </span>

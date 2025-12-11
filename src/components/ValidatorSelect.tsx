@@ -5,6 +5,39 @@ import { useValidators } from "@/hooks/useValidators";
 import { DEFAULT_VALIDATORS } from "@/lib/constants";
 import { truncateAddress } from "@/lib/utils";
 
+// Avatar component with fallback
+function ValidatorAvatar({
+  imageUrl,
+  name,
+  size = "md"
+}: {
+  imageUrl?: string;
+  name: string;
+  size?: "sm" | "md";
+}) {
+  const [hasError, setHasError] = useState(false);
+  const sizeClasses = size === "sm" ? "w-4 h-4 text-[8px]" : "w-4 h-4 text-[8px]";
+
+  if (!imageUrl || hasError) {
+    return (
+      <div className={`${sizeClasses} rounded-full bg-[var(--accent-primary)]/30 flex items-center justify-center flex-shrink-0`}>
+        <span className="font-bold text-[var(--accent-primary)]">
+          {name.charAt(0).toUpperCase()}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={name}
+      className={`${sizeClasses} rounded-full object-cover flex-shrink-0`}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 interface ValidatorSelectProps {
   selectedValidators: string[];
   onSelectionChange: (validators: string[]) => void;
@@ -126,15 +159,7 @@ export function ValidatorSelect({
             );
             return (
               <div key={v.address} className="stat-chip">
-                {validatorData?.imageUrl ? (
-                  <img
-                    src={validatorData.imageUrl}
-                    alt={v.name}
-                    className="w-4 h-4 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="status-dot !w-2 !h-2" />
-                )}
+                <ValidatorAvatar imageUrl={validatorData?.imageUrl} name={v.name} />
                 <span className="value">{v.name}</span>
               </div>
             );
@@ -210,19 +235,7 @@ export function ValidatorSelect({
                         )}
                       </div>
                       {/* Validator Icon */}
-                      {validator.imageUrl ? (
-                        <img
-                          src={validator.imageUrl}
-                          alt={validator.name}
-                          className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full bg-[var(--accent-primary)]/30 flex items-center justify-center flex-shrink-0">
-                          <span className="text-[8px] font-bold text-[var(--accent-primary)]">
-                            {validator.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
+                      <ValidatorAvatar imageUrl={validator.imageUrl} name={validator.name} />
                       {/* Name */}
                       <span className="font-medium text-[var(--text-primary)] text-xs truncate flex-1">
                         {validator.name}
