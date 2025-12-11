@@ -37,9 +37,9 @@ module tokenlabs_liquid_stake::cert {
             witness,
             DECIMALS,
             b"tIOTA",
-            b"Tokenlabs Staked IOTA",
-            b"Tokenlabs Liquid Stake provides the best user experience for IOTA staking with instant liquidity through a reward-bearing synthetic token called tIOTA.",
-            option::some<Url>(url::new_unsafe_from_bytes(b"https://tokenlabs.io/tIOTA.png")),
+            b"tIOTA",
+            b"Tokenlabs Liquid Stake - Reward-bearing staked IOTA token",
+            option::some<Url>(url::new_unsafe_from_bytes(b"https://tokenlabs.network/tIOTA.png")),
             ctx
         );
         transfer::public_freeze_object(metadata);
