@@ -202,31 +202,173 @@ button[class*="Connect"] svg {
   opacity: 1 !important;
 }
 
-/* Modal styling */
-[data-dapp-kit] [role="dialog"],
-[class*="dapp-kit"] [role="dialog"] {
-  background: #0a1628 !important;
-  border: 1px solid rgba(0, 85, 221, 0.2) !important;
-  border-radius: 20px !important;
-}
+/* ═══════════════════════════════════════════════════════════════
+   Modal styling - Connect Wallet Dialog
+   IOTA dApp Kit uses specific class patterns we need to override
+   ═══════════════════════════════════════════════════════════════ */
 
-/* Wallet list in modal */
-[data-dapp-kit] [class*="wallet-list"],
-[class*="dapp-kit"] [class*="wallet-list"] {
+/* Modal backdrop */
+[data-radix-portal] [role="dialog"],
+[data-radix-portal] > div > div {
   background: transparent !important;
 }
 
-[data-dapp-kit] [class*="wallet-item"],
-[class*="dapp-kit"] [class*="wallet-item"] {
-  background: rgba(0, 40, 90, 0.3) !important;
-  border: 1px solid rgba(0, 85, 221, 0.15) !important;
-  border-radius: 12px !important;
-  padding: 12px 16px !important;
-  transition: all 0.2s ease !important;
+/* Main modal container - target everything */
+[data-radix-portal] [role="dialog"] > div,
+[data-radix-portal] [role="dialog"] > div > div,
+div[role="dialog"],
+div[role="dialog"] > div {
+  background: linear-gradient(180deg, #0d1f3c 0%, #081428 100%) !important;
+  border: 1px solid rgba(0, 85, 221, 0.3) !important;
+  border-radius: 16px !important;
 }
 
-[data-dapp-kit] [class*="wallet-item"]:hover,
-[class*="dapp-kit"] [class*="wallet-item"]:hover {
-  background: rgba(0, 60, 120, 0.4) !important;
-  border-color: rgba(0, 170, 255, 0.3) !important;
+/* Force dark background on ALL divs inside modal */
+div[role="dialog"] div {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* The actual modal box */
+div[role="dialog"] > div:first-child {
+  background: linear-gradient(180deg, #0d1f3c 0%, #081428 100%) !important;
+  border: 1px solid rgba(0, 85, 221, 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 25px 60px -15px rgba(0, 0, 0, 0.8),
+    0 0 50px -15px rgba(0, 85, 221, 0.3) !important;
+  overflow: hidden !important;
+  max-width: 340px !important;
+}
+
+/* Hide the "What is a Wallet" panel - RIGHT SIDE */
+div[role="dialog"] > div:first-child > div:nth-child(2),
+div[role="dialog"] > div > div:nth-child(2),
+div[role="dialog"] > div > div > div:nth-child(2) {
+  display: none !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Left panel with wallets - make full width */
+div[role="dialog"] > div:first-child > div:first-child {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  background: linear-gradient(180deg, #0d1f3c 0%, #081428 100%) !important;
+  padding: 0 !important;
+}
+
+/* Header section */
+div[role="dialog"] h2,
+div[role="dialog"] h3,
+div[role="dialog"] [class*="Title"],
+div[role="dialog"] [class*="title"],
+div[role="dialog"] > div > div > h2 {
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  padding: 20px 20px 12px !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+
+/* Close button */
+div[role="dialog"] button[aria-label="Close"],
+div[role="dialog"] svg[class*="close"],
+div[role="dialog"] button:has(svg):first-of-type {
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 4px !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #8899aa !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+div[role="dialog"] button[aria-label="Close"]:hover {
+  background: rgba(255, 107, 107, 0.2) !important;
+  border-color: rgba(255, 107, 107, 0.3) !important;
+  color: #ff6b6b !important;
+}
+
+/* Wallet buttons container */
+div[role="dialog"] ul,
+div[role="dialog"] [class*="list"],
+div[role="dialog"] > div > div > div {
+  background: transparent !important;
+  padding: 8px 16px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  list-style: none !important;
+}
+
+/* Individual wallet buttons */
+div[role="dialog"] li,
+div[role="dialog"] li > button,
+div[role="dialog"] button[class*="wallet"],
+div[role="dialog"] button[class*="Wallet"],
+div[role="dialog"] ul button,
+div[role="dialog"] ul > li > button {
+  background: rgba(0, 60, 120, 0.5) !important;
+  border: 1px solid rgba(0, 120, 200, 0.3) !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+}
+
+div[role="dialog"] li:hover,
+div[role="dialog"] li > button:hover,
+div[role="dialog"] ul button:hover,
+div[role="dialog"] ul > li > button:hover {
+  background: rgba(0, 100, 180, 0.6) !important;
+  border-color: rgba(0, 170, 255, 0.5) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Wallet icons */
+div[role="dialog"] li img,
+div[role="dialog"] button img {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Force ALL text white in modal */
+div[role="dialog"],
+div[role="dialog"] *,
+div[role="dialog"] span,
+div[role="dialog"] p,
+div[role="dialog"] h2,
+div[role="dialog"] h3,
+div[role="dialog"] button {
+  color: #ffffff !important;
+}
+
+/* "What is a Wallet" link at bottom - hide */
+div[role="dialog"] a,
+div[role="dialog"] [class*="whatIs"],
+div[role="dialog"] [class*="WhatIs"],
+div[role="dialog"] > div > div > a {
+  display: none !important;
 }
