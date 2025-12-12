@@ -80,12 +80,24 @@ export function usePoolData() {
   let ratio: bigint = RATIO_MAX; // Default 1:1
 
   if (poolState && metadata) {
-    const tvl = poolState.totalStaked + poolState.pending + poolState.totalRewards - poolState.collectedRewards;
+    // Calculate net rewards (protect against negative)
+    const netRewards = poolState.totalRewards >= poolState.collectedRewards
+      ? poolState.totalRewards - poolState.collectedRewards
+      : 0n;
 
-    if (tvl > 0n && metadata.totalSupply > 0n) {
+    // Calculate TVL
+    const tvl = poolState.totalStaked + poolState.pending + netRewards;
+
+    if (metadata.totalSupply === 0n) {
+      // Empty pool - 1:1 ratio (first stake)
+      ratio = RATIO_MAX;
+    } else if (tvl > 0n) {
+      // Normal case: calculate ratio based on TVL
       ratio = (metadata.totalSupply * RATIO_MAX) / tvl;
-    } else if (metadata.totalSupply === 0n) {
-      // Empty pool - 1:1 ratio
+    } else {
+      // Edge case: supply exists but tvl is 0 (should never happen)
+      // This indicates data corruption - log warning and use 1:1 as safe default
+      console.warn("Invalid pool state: supply exists but TVL is 0. Using 1:1 ratio as fallback.");
       ratio = RATIO_MAX;
     }
   }

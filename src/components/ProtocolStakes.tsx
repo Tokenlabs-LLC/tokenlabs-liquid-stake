@@ -44,7 +44,7 @@ interface DisplayStake {
   children?: ChildStake[];
 }
 
-// Avatar component with fallback
+// Compact avatar component with fallback
 function ValidatorAvatar({
   imageUrl,
   name,
@@ -53,11 +53,11 @@ function ValidatorAvatar({
 }: {
   imageUrl?: string;
   name: string;
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   muted?: boolean;
 }) {
   const [hasError, setHasError] = useState(false);
-  const sizeClasses = size === "sm" ? "w-4 h-4 text-[7px]" : "w-5 h-5 text-[9px]";
+  const sizeClasses = size === "xs" ? "w-3.5 h-3.5 text-[6px]" : size === "sm" ? "w-4 h-4 text-[7px]" : "w-[18px] h-[18px] text-[8px]";
   const bgColor = muted ? "bg-[var(--text-muted)]/20" : "bg-[var(--accent-primary)]/30";
   const textColor = muted ? "text-[var(--text-muted)]" : "text-[var(--accent-primary)]";
 
@@ -168,15 +168,15 @@ export function ProtocolStakes() {
 
   if (isLoading) {
     return (
-      <div className="glass-card p-5 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-sm text-[var(--text-primary)]">
+      <div className="glass-card px-4 py-3 h-full">
+        <div className="flex items-center justify-between mb-2.5">
+          <h3 className="font-display font-semibold text-xs text-[var(--text-primary)] tracking-wide uppercase">
             Protocol Stakes
           </h3>
         </div>
-        <div className="space-y-2 animate-pulse">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-9 bg-[var(--bg-card-solid)] rounded-lg" />
+        <div className="space-y-1 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-6 bg-[var(--bg-card-solid)] rounded" />
           ))}
         </div>
       </div>
@@ -185,8 +185,8 @@ export function ProtocolStakes() {
 
   if (error) {
     return (
-      <div className="glass-card p-5 h-full">
-        <p className="text-red-400 text-sm">Error loading protocol stakes</p>
+      <div className="glass-card px-4 py-3 h-full">
+        <p className="text-red-400 text-xs">Error loading protocol stakes</p>
       </div>
     );
   }
@@ -196,26 +196,26 @@ export function ProtocolStakes() {
   const validatorsWithoutStake = displayStakes.filter((s) => s.totalStaked === 0n);
 
   return (
-    <div className="glass-card p-5 flex flex-col max-h-[400px]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-sm text-[var(--text-primary)]">
+    <div className="glass-card px-4 py-3 flex flex-col max-h-[400px]">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between mb-2.5">
+        <h3 className="font-display font-semibold text-xs text-[var(--text-primary)] tracking-wide uppercase">
           Protocol Stakes
         </h3>
-        <div className="stat-chip !py-1 !px-2.5 text-xs">
-          <img src={IOTA_LOGO} alt="IOTA" className="w-3.5 h-3.5 rounded-full" />
-          <span className="value">{formatIota(totalProtocolStake)} IOTA</span>
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
+          <img src={IOTA_LOGO} alt="IOTA" className="w-3 h-3 rounded-full" />
+          <span className="text-[10px] mono font-medium text-[var(--accent-primary)]">{formatIota(totalProtocolStake)}</span>
         </div>
       </div>
 
-      {/* Stakes list */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+      {/* Ultra-compact Stakes list */}
+      <div className="flex-1 overflow-y-auto space-y-0.5">
         {validatorsWithStake.length === 0 && validatorsWithoutStake.length === 0 ? (
-          <div className="text-center py-8 text-[var(--text-muted)] text-sm">
+          <div className="text-center py-6 text-[var(--text-muted)] text-xs">
             No validators configured
           </div>
         ) : validatorsWithStake.length === 0 ? (
-          <div className="text-center py-4 text-[var(--text-muted)] text-sm">
+          <div className="text-center py-3 text-[var(--text-muted)] text-xs">
             No stake distributed yet
           </div>
         ) : (
@@ -228,78 +228,75 @@ export function ProtocolStakes() {
 
             return (
               <div key={stake.id}>
-                <div
-                  className="relative bg-[var(--bg-card-solid)]/50 rounded-lg p-3 border border-[var(--border-subtle)] overflow-hidden"
-                >
-                  {/* Progress bar background */}
-                  <div
-                    className="absolute inset-0 bg-gradient-to-r from-[var(--accent-primary)]/20 to-transparent"
-                    style={{ width: `${percentage}%` }}
-                  />
+                {/* Compact row with thin progress bar at bottom */}
+                <div className="group relative bg-[var(--bg-card-solid)]/40 hover:bg-[var(--bg-card-solid)]/60 rounded py-1.5 px-2.5 transition-colors">
+                  {/* Thin progress indicator at bottom */}
+                  <div className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[var(--accent-primary)]/60 to-[var(--accent-primary)]/20 rounded-b" style={{ width: `${percentage}%` }} />
 
-                  {/* Content */}
-                  <div className="relative flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {/* Expand button for groups */}
-                      {stake.isGroup && stake.children && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpandedGroups((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(stake.id)) {
-                                next.delete(stake.id);
-                              } else {
-                                next.add(stake.id);
-                              }
-                              return next;
-                            });
-                          }}
-                          className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  {/* Content row */}
+                  <div className="relative flex items-center gap-1.5">
+                    {/* Expand button for groups */}
+                    {stake.isGroup && stake.children && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedGroups((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(stake.id)) {
+                              next.delete(stake.id);
+                            } else {
+                              next.add(stake.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-3 h-3 flex items-center justify-center flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                      >
+                        <svg
+                          className={`w-2.5 h-2.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
                         >
-                          <svg
-                            className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      )}
-                      {/* Validator Icon */}
-                      <ValidatorAvatar
-                        imageUrl={stake.imageUrl}
-                        name={stake.name}
-                      />
-                      <span className="font-medium text-sm text-[var(--text-primary)]">
-                        {stake.name}
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )}
+
+                    {/* Avatar */}
+                    <ValidatorAvatar imageUrl={stake.imageUrl} name={stake.name} />
+
+                    {/* Name */}
+                    <span className="font-medium text-xs text-[var(--text-primary)] truncate min-w-0 flex-shrink">
+                      {stake.name}
+                    </span>
+
+                    {/* Badges inline - compact */}
+                    {stake.isGroup && stake.groupCount && (
+                      <span className="text-[7px] px-1 py-px rounded bg-purple-500/20 text-purple-400 font-semibold flex-shrink-0">
+                        {stake.groupCount}x
                       </span>
-                      {/* Group badge */}
-                      {stake.isGroup && stake.groupCount && (
-                        <span className="text-[8px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 font-medium">
-                          {stake.groupCount}x
-                        </span>
-                      )}
-                      {/* Voting Power Badge */}
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium mono" title="Network Voting Power">
-                        VP {(stake.votingPower / 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="mono text-sm font-semibold text-[var(--accent-secondary)]" title="Staked Amount">
-                        {formatIota(stake.totalStaked)} IOTA
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)] w-12 text-right" title="Share of Protocol Stake">
-                        Share {percentage.toFixed(1)}%
-                      </span>
-                    </div>
+                    )}
+                    <span className="text-[7px] px-1 py-px rounded bg-blue-500/15 text-blue-400/80 mono flex-shrink-0">
+                      {(stake.votingPower / 100).toFixed(1)}%
+                    </span>
+
+                    {/* Spacer */}
+                    <div className="flex-1" />
+
+                    {/* Amount + Share - right aligned, compact */}
+                    <span className="mono text-xs font-semibold text-[var(--accent-secondary)] flex-shrink-0">
+                      {formatIota(stake.totalStaked)}
+                    </span>
+                    <span className="text-[9px] text-[var(--text-muted)] w-9 text-right flex-shrink-0 tabular-nums">
+                      {percentage.toFixed(1)}%
+                    </span>
                   </div>
                 </div>
 
-                {/* Expanded children */}
+                {/* Expanded children - ultra compact */}
                 {stake.isGroup && isExpanded && stake.children && (
-                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-purple-500/30 pl-3">
+                  <div className="ml-3 mt-0.5 space-y-px border-l border-purple-500/30 pl-2">
                     {stake.children.map((child) => {
                       const childPercentage =
                         totalProtocolStake > 0n
@@ -308,36 +305,22 @@ export function ProtocolStakes() {
                       return (
                         <div
                           key={child.address}
-                          className="relative bg-[var(--bg-card-solid)]/30 rounded-lg p-2 border border-[var(--border-subtle)]/50 overflow-hidden"
+                          className="flex items-center gap-1.5 py-1 px-1.5 rounded bg-purple-500/5"
                         >
-                          {/* Progress bar background */}
-                          <div
-                            className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-transparent"
-                            style={{ width: `${childPercentage}%` }}
-                          />
-                          <div className="relative flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <ValidatorAvatar
-                                imageUrl={child.imageUrl}
-                                name={child.name}
-                                size="sm"
-                              />
-                              <span className="text-xs text-[var(--text-secondary)]">
-                                {child.name}
-                              </span>
-                              <span className="text-[8px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400/70 mono" title="Network Voting Power">
-                                VP {(child.votingPower / 100).toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="mono text-xs text-[var(--text-muted)]" title="Staked Amount">
-                                {formatIota(child.totalStaked)} IOTA
-                              </span>
-                              <span className="text-[9px] text-[var(--text-muted)] w-12 text-right" title="Share of Protocol Stake">
-                                {childPercentage.toFixed(1)}%
-                              </span>
-                            </div>
-                          </div>
+                          <ValidatorAvatar imageUrl={child.imageUrl} name={child.name} size="xs" />
+                          <span className="text-[10px] text-[var(--text-secondary)] truncate">
+                            {child.name}
+                          </span>
+                          <span className="text-[6px] px-0.5 py-px rounded bg-blue-500/10 text-blue-400/60 mono flex-shrink-0">
+                            {(child.votingPower / 100).toFixed(1)}%
+                          </span>
+                          <div className="flex-1" />
+                          <span className="mono text-[10px] text-[var(--text-muted)]">
+                            {formatIota(child.totalStaked)}
+                          </span>
+                          <span className="text-[8px] text-[var(--text-muted)] w-8 text-right tabular-nums">
+                            {childPercentage.toFixed(1)}%
+                          </span>
                         </div>
                       );
                     })}
@@ -348,54 +331,38 @@ export function ProtocolStakes() {
           })
         )}
 
-        {/* Show validators without stake (collapsed) */}
+        {/* Collapsed validators without stake */}
         {validatorsWithoutStake.length > 0 && (
-          <details className="group mt-2">
-            <summary className="text-xs text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-secondary)] py-2 list-none flex items-center gap-1">
+          <details className="group mt-1">
+            <summary className="text-[10px] text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-secondary)] py-1.5 list-none flex items-center gap-1">
               <svg
-                className="w-3 h-3 transition-transform group-open:rotate-90"
+                className="w-2.5 h-2.5 transition-transform group-open:rotate-90"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              {validatorsWithoutStake.length} validators without stake
+              {validatorsWithoutStake.length} without stake
             </summary>
-            <div className="space-y-1 mt-1 max-h-32 overflow-y-auto">
+            <div className="space-y-px mt-0.5 max-h-28 overflow-y-auto">
               {validatorsWithoutStake.map((stake) => (
                 <div
                   key={stake.id}
-                  className="flex items-center justify-between py-1.5 px-2 rounded bg-[var(--bg-card-solid)]/30 text-[var(--text-muted)]"
+                  className="flex items-center gap-1.5 py-1 px-2 rounded bg-[var(--bg-card-solid)]/20 text-[var(--text-muted)]"
                 >
-                  <div className="flex items-center gap-1.5">
-                    {/* Validator Icon */}
-                    <ValidatorAvatar
-                      imageUrl={stake.imageUrl}
-                      name={stake.name}
-                      size="sm"
-                      muted
-                    />
-                    <span className="text-xs">
-                      {stake.name}
+                  <ValidatorAvatar imageUrl={stake.imageUrl} name={stake.name} size="xs" muted />
+                  <span className="text-[10px] truncate">{stake.name}</span>
+                  {stake.isGroup && stake.groupCount && (
+                    <span className="text-[6px] px-0.5 rounded bg-purple-500/10 text-purple-400/50 font-medium">
+                      {stake.groupCount}x
                     </span>
-                    {/* Group badge */}
-                    {stake.isGroup && stake.groupCount && (
-                      <span className="text-[7px] px-0.5 py-0.5 rounded bg-purple-500/10 text-purple-400/60 font-medium">
-                        {stake.groupCount}x
-                      </span>
-                    )}
-                    {/* Voting Power Badge */}
-                    <span className="text-[7px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400/60 mono" title="Network Voting Power">
-                      VP {(stake.votingPower / 100).toFixed(1)}%
-                    </span>
-                  </div>
-                  <span className="text-[10px] mono" title="Staked Amount">0 IOTA</span>
+                  )}
+                  <span className="text-[6px] px-0.5 rounded bg-blue-500/10 text-blue-400/50 mono">
+                    {(stake.votingPower / 100).toFixed(1)}%
+                  </span>
+                  <div className="flex-1" />
+                  <span className="text-[9px] mono">0</span>
                 </div>
               ))}
             </div>
@@ -403,13 +370,11 @@ export function ProtocolStakes() {
         )}
       </div>
 
-      {/* Summary footer */}
+      {/* Minimal footer */}
       {validatorsWithStake.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+        <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]/50 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
           <span>{validatorsWithStake.length} active</span>
-          <span className="mono">
-            Avg: {formatIota(totalProtocolStake / BigInt(Math.max(validatorsWithStake.length, 1)))}
-          </span>
+          <span className="mono">avg {formatIota(totalProtocolStake / BigInt(Math.max(validatorsWithStake.length, 1)))}</span>
         </div>
       )}
     </div>

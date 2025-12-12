@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useSignAndExecuteTransaction, useCurrentAccount } from "@iota/dapp-kit";
+import { useState, useMemo, useCallback } from "react";
+import { useSignAndExecuteTransaction, useCurrentAccount, useIotaClient } from "@iota/dapp-kit";
+import { Transaction } from "@iota/iota-sdk/transactions";
 import { useAdminCaps } from "@/hooks/useAdmin";
 import { usePoolData } from "@/hooks/usePoolData";
 
@@ -102,6 +103,7 @@ import { StakeHistoryPanel } from "./StakeHistoryPanel";
 
 export function AdminPanel() {
   const account = useCurrentAccount();
+  const client = useIotaClient();
   const { hasOwnerCap, hasOperatorCap, ownerCapId, operatorCapId, isLoading: capsLoading } = useAdminCaps();
   const { poolState, refetch: refetchPool } = usePoolData();
   const { stakes: protocolStakesRaw, totalProtocolStake } = useProtocolStakes();
@@ -178,30 +180,82 @@ export function AdminPanel() {
     message: string;
   }>({ type: null, message: "" });
 
-  const executeTx = (
-    tx: ReturnType<typeof buildChangeMinStakeTx>,
-    successMsg: string
-  ) => {
-    setTxStatus({ type: "pending", message: "Processing..." });
+  /**
+   * Execute transaction with automatic gas estimation using devInspect
+   */
+  const executeTx = useCallback(
+    async (
+      tx: Transaction,
+      successMsg: string
+    ) => {
+      if (!account) return;
 
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: (result) => {
-          setTxStatus({
-            type: "success",
-            message: `${successMsg} TX: ${result.digest.slice(0, 10)}...`,
-          });
-          setTimeout(refetchPool, 2000);
-          setTimeout(() => setTxStatus({ type: null, message: "" }), 5000);
-        },
-        onError: (error) => {
-          setTxStatus({ type: "error", message: `Failed: ${error.message}` });
+      setTxStatus({ type: "pending", message: "Estimating gas..." });
+
+      try {
+        // Set sender and high gas budget for accurate estimation
+        tx.setSender(account.address);
+        tx.setGasBudget(500_000_000); // 0.5 IOTA max for estimation
+
+        // Use devInspectTransactionBlock for gas estimation
+        const inspectResult = await client.devInspectTransactionBlock({
+          transactionBlock: tx,
+          sender: account.address,
+        });
+
+        if (inspectResult.effects.status.status !== "success") {
+          const errorMsg = inspectResult.effects.status.error || "Transaction simulation failed";
+          setTxStatus({ type: "error", message: `Simulation failed: ${errorMsg.slice(0, 80)}` });
           setTimeout(() => setTxStatus({ type: null, message: "" }), 8000);
-        },
+          return;
+        }
+
+        // Calculate gas with 10% buffer
+        const gasUsed = inspectResult.effects.gasUsed;
+        const computationCost = BigInt(gasUsed.computationCost);
+        const storageCost = BigInt(gasUsed.storageCost);
+        const storageRebate = BigInt(gasUsed.storageRebate);
+        // gasBudget needs to cover computation + storage (rebate comes back after)
+        const gasBudget = computationCost + storageCost;
+        const gasWithBuffer = BigInt(Math.ceil(Number(gasBudget) * 1.1));
+        // Minimum 0.01 IOTA, maximum 2 IOTA
+        const minGas = 10_000_000n;
+        const maxGas = 2_000_000_000n;
+        const finalGas = gasWithBuffer < minGas ? minGas : gasWithBuffer > maxGas ? maxGas : gasWithBuffer;
+
+        console.log(`Admin tx gas estimate: computation=${computationCost}, storage=${storageCost}, rebate=${storageRebate}, budget=${gasBudget}, finalBudget=${finalGas}`);
+
+        // Set the estimated gas budget
+        tx.setGasBudget(Number(finalGas));
+
+        setTxStatus({ type: "pending", message: "Confirm in wallet..." });
+
+        signAndExecute(
+          { transaction: tx },
+          {
+            onSuccess: (result) => {
+              setTxStatus({
+                type: "success",
+                message: `${successMsg} TX: ${result.digest.slice(0, 10)}...`,
+              });
+              setTimeout(refetchPool, 2000);
+              setTimeout(() => setTxStatus({ type: null, message: "" }), 5000);
+            },
+            onError: (error) => {
+              setTxStatus({ type: "error", message: `Failed: ${error.message}` });
+              setTimeout(() => setTxStatus({ type: null, message: "" }), 8000);
+            },
+          }
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        console.error("Admin tx error:", error);
+        setTxStatus({ type: "error", message: `Error: ${msg.slice(0, 100)}` });
+        setTimeout(() => setTxStatus({ type: null, message: "" }), 8000);
       }
-    );
-  };
+    },
+    [account, client, signAndExecute, refetchPool]
+  );
 
   // Don't show if not connected
   if (!account) {

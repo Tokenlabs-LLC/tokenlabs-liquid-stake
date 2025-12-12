@@ -9,22 +9,23 @@ export function PoolStats() {
 
   if (isLoading) {
     return (
-      <div className="glass-card p-6">
-        <div className="flex flex-wrap gap-8 animate-pulse">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex-1 min-w-[100px]">
-              <div className="h-3 bg-[var(--bg-card-solid)] rounded w-14 mb-3" />
-              <div className="h-7 bg-[var(--bg-card-solid)] rounded w-20" />
+      <div className="glass-card px-5 py-4" role="region" aria-label="Pool statistics loading">
+        <div className="grid grid-cols-3 gap-x-6 gap-y-3 animate-pulse" aria-busy="true">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="h-3 bg-[var(--bg-card-solid)] rounded w-8" />
+              <div className="h-4 bg-[var(--bg-card-solid)] rounded w-16" />
             </div>
           ))}
         </div>
+        <span className="sr-only">Loading pool statistics...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="glass-card p-6 border-red-500/30">
+      <div className="glass-card px-5 py-4 border-red-500/30" role="alert">
         <p className="text-red-400 text-sm">Error loading pool data</p>
       </div>
     );
@@ -32,69 +33,71 @@ export function PoolStats() {
 
   if (!poolState || !metadata) {
     return (
-      <div className="glass-card p-6">
+      <div className="glass-card px-5 py-4" role="region" aria-label="Pool statistics unavailable">
         <p className="text-[var(--text-muted)] text-sm">No pool data available</p>
       </div>
     );
   }
 
-  const tvl = poolState.totalStaked + poolState.pending;
-  const netRewards = poolState.totalRewards - poolState.collectedRewards;
+  // Net rewards (protect against negative values which indicate a bug)
+  const netRewards = poolState.totalRewards >= poolState.collectedRewards
+    ? poolState.totalRewards - poolState.collectedRewards
+    : 0n;
 
-  const stats = [
-    { label: "TVL", value: formatIota(tvl), unit: "IOTA", logo: IOTA_LOGO, highlight: true },
-    { label: "Rewards", value: formatIota(netRewards), unit: "IOTA", logo: IOTA_LOGO },
-    { label: "Supply", value: formatIota(metadata.totalSupply), unit: "tIOTA", logo: TIOTA_LOGO },
-    { label: "Rate", value: formatRatio(ratio), unit: "", logo: null },
-    { label: "Fee", value: formatPercent(poolState.baseRewardFee), unit: "", logo: null },
-  ];
+  // TVL must match ratio calculation: totalStaked + pending + netRewards
+  const tvl = poolState.totalStaked + poolState.pending + netRewards;
 
   return (
-    <div className="glass-card p-6">
-      <div className="flex flex-wrap items-center justify-between gap-6">
-        {/* Stats */}
-        <div className="flex flex-wrap items-center gap-10">
-          {stats.map((stat, index) => (
-            <div key={stat.label} className="group relative">
-              {/* Decorative connector */}
-              {index > 0 && (
-                <div className="hidden lg:block absolute -left-5 top-1/2 -translate-y-1/2 w-px h-8 bg-gradient-to-b from-transparent via-[var(--border-subtle)] to-transparent" />
-              )}
+    <div className="glass-card px-5 py-4" role="region" aria-label="Pool statistics">
+      <div className="grid grid-cols-3 gap-x-6 gap-y-2.5">
+        {/* Row 1 */}
+        <Stat label="TVL" value={formatIota(tvl)} unit="IOTA" logo={IOTA_LOGO} highlight />
+        <Stat label="Rewards" value={formatIota(netRewards)} unit="IOTA" logo={IOTA_LOGO} />
+        <Stat label="Supply" value={formatIota(metadata.totalSupply)} unit="tIOTA" logo={TIOTA_LOGO} />
 
-              <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-[0.15em] font-medium mb-1.5">
-                {stat.label}
-              </p>
-              <div className={`flex items-center gap-1.5 text-xl font-semibold transition-colors ${
-                stat.highlight
-                  ? "text-[var(--accent-secondary)] group-hover:text-[var(--text-primary)]"
-                  : "text-[var(--text-primary)] group-hover:text-[var(--accent-secondary)]"
-              }`}>
-                <span className="mono">{stat.value}</span>
-                {stat.logo && (
-                  <img src={stat.logo} alt={stat.unit} className="w-4 h-4 rounded-full" />
-                )}
-                {stat.unit && (
-                  <span className="text-sm text-[var(--text-muted)] font-normal">
-                    {stat.unit}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Row 2 */}
+        <Stat label="Rate" value={formatRatio(ratio)} />
+        <Stat label="Fee" value={formatPercent(poolState.baseRewardFee)} />
 
         {/* Status */}
-        <div className="flex items-center gap-3">
-          <div className={`status-dot ${poolState.paused ? "!bg-red-500 !shadow-red-500/50" : ""}`} />
-          <span className={`text-sm font-semibold tracking-wide ${
-            poolState.paused
-              ? "text-red-400"
-              : "text-[var(--accent-secondary)]"
-          }`}>
+        <div className="flex items-center gap-2" role="status" aria-label={`Pool: ${poolState.paused ? "Paused" : "Active"}`}>
+          <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Status</span>
+          <div
+            className={`w-1.5 h-1.5 rounded-full ${
+              poolState.paused ? "bg-red-500" : "bg-emerald-500 animate-pulse"
+            }`}
+            aria-hidden="true"
+          />
+          <span className={`text-sm font-medium ${poolState.paused ? "text-red-400" : "text-emerald-400"}`}>
             {poolState.paused ? "Paused" : "Active"}
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  unit,
+  logo,
+  highlight
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  logo?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
+      <span className={`mono text-sm font-medium ${highlight ? "text-[var(--accent-secondary)]" : "text-[var(--text-primary)]"}`}>
+        {value}
+      </span>
+      {logo && <img src={logo} alt="" className="w-3.5 h-3.5 rounded-full" aria-hidden="true" />}
+      {unit && <span className="text-xs text-[var(--text-muted)]">{unit}</span>}
     </div>
   );
 }
