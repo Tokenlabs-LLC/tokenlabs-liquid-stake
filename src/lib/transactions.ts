@@ -201,6 +201,26 @@ export function buildCollectFeeTx(toAddress: string, ownerCapId: string = OWNER_
   return tx;
 }
 
+/**
+ * Change max validator stake per epoch
+ * Controls how much can be staked to a single validator in one epoch
+ * @param value - The max amount in NANOS (e.g., 50_000_000_000_000_000 = 50M IOTA)
+ */
+export function buildChangeMaxStakePerEpochTx(value: bigint, ownerCapId: string = OWNER_CAP_ID): Transaction {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::native_pool::change_max_validator_stake_per_epoch`,
+    arguments: [
+      tx.object(POOL_ID),
+      tx.object(ownerCapId),
+      tx.pure.u64(value),
+    ],
+  });
+
+  return tx;
+}
+
 // ============================================
 // Operator Transactions
 // ============================================

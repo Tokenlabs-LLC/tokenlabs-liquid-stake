@@ -10,6 +10,8 @@ export interface ValidatorStake {
   priority: number;
   votingPower: number;
   registrationOrder: number; // Order in which validator was added to protocol
+  stakedInEpoch: bigint; // Amount staked in current epoch (for max limit check)
+  stakeEpoch: number; // Epoch when last stake was made
 }
 
 export function useProtocolStakes() {
@@ -30,6 +32,9 @@ export function useProtocolStakes() {
       if (poolObj.data?.content?.dataType !== "moveObject") {
         return [];
       }
+
+      // Get current epoch
+      const currentEpoch = parseInt(systemState.epoch);
 
       // Build voting power map from system validators
       const votingPowerMap = new Map<string, number>();
@@ -74,6 +79,8 @@ export function useProtocolStakes() {
           priority: validatorData.get(address)?.priority ?? 0,
           votingPower: votingPowerMap.get(address.toLowerCase()) ?? 0,
           registrationOrder: validatorData.get(address)?.order ?? 999,
+          stakedInEpoch: 0n,
+          stakeEpoch: 0,
         }));
       }
 
@@ -105,11 +112,13 @@ export function useProtocolStakes() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const vaultFields = vaultObj.data.content.fields as any;
             // The vault might be wrapped in a "value" field
-            const totalStaked = BigInt(
-              vaultFields?.value?.fields?.total_staked ||
-              vaultFields?.total_staked ||
-              "0"
-            );
+            const vaultData = vaultFields?.value?.fields || vaultFields;
+            const totalStaked = BigInt(vaultData?.total_staked || "0");
+            const stakeEpoch = parseInt(vaultData?.stake_epoch || "0");
+            // Only count stakedInEpoch if it's from the current epoch
+            const stakedInEpoch = stakeEpoch === currentEpoch
+              ? BigInt(vaultData?.staked_in_epoch || "0")
+              : 0n;
 
             stakes.push({
               address: validatorAddress,
@@ -117,6 +126,8 @@ export function useProtocolStakes() {
               priority: validatorData.get(validatorAddress.toLowerCase())?.priority ?? 0,
               votingPower: votingPowerMap.get(validatorAddress.toLowerCase()) ?? 0,
               registrationOrder: validatorData.get(validatorAddress.toLowerCase())?.order ?? 999,
+              stakedInEpoch,
+              stakeEpoch,
             });
             foundAddresses.add(validatorAddress.toLowerCase());
           }
@@ -134,6 +145,8 @@ export function useProtocolStakes() {
             priority: validatorData.get(addr.toLowerCase())?.priority ?? 0,
             votingPower: votingPowerMap.get(addr.toLowerCase()) ?? 0,
             registrationOrder: validatorData.get(addr.toLowerCase())?.order ?? 999,
+            stakedInEpoch: 0n,
+            stakeEpoch: 0,
           });
         }
       }
@@ -156,4 +169,21 @@ export function useProtocolStakes() {
     error,
     refetch,
   };
+}
+
+// Hook to get current epoch
+export function useCurrentEpoch() {
+  const client = useIotaClient();
+
+  const { data } = useQuery({
+    queryKey: ["currentEpoch"],
+    queryFn: async () => {
+      const systemState = await client.getLatestIotaSystemState();
+      return parseInt(systemState.epoch);
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  return data ?? 0;
 }

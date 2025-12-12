@@ -2,7 +2,10 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useValidators } from "@/hooks/useValidators";
+import { useProtocolStakes } from "@/hooks/useProtocolStakes";
+import { usePoolData } from "@/hooks/usePoolData";
 import { DEFAULT_VALIDATORS } from "@/lib/constants";
+import { formatIota } from "@/lib/utils";
 
 // IOTA validator names to check for group voting power
 const IOTA_VALIDATOR_NAMES = ["IOTA 1", "IOTA 2", "IOTA 3", "IOTA 4"];
@@ -67,6 +70,8 @@ interface DisplayValidator {
   votingPower: number;
   isIotaGroup: boolean; // Part of IOTA 1-4 group
   groupVotingPower: number; // Combined voting power if part of IOTA group
+  stakedInEpoch: bigint; // Amount staked to this validator in current epoch
+  reachedEpochLimit: boolean; // True if validator has reached max stake per epoch
 }
 
 const MAX_VALIDATORS = 10;
@@ -89,7 +94,20 @@ export function ValidatorSelect({
   onModeChange,
 }: ValidatorSelectProps) {
   const { validators, isLoading, isDefaultValidator } = useValidators();
+  const { stakes: protocolStakes } = useProtocolStakes();
+  const { poolState } = usePoolData();
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Build map of stakedInEpoch from protocol stakes
+  const stakedInEpochMap = useMemo(() => {
+    const map = new Map<string, bigint>();
+    for (const stake of protocolStakes) {
+      map.set(stake.address.toLowerCase(), stake.stakedInEpoch);
+    }
+    return map;
+  }, [protocolStakes]);
+
+  const maxStakePerEpoch = poolState?.maxValidatorStakePerEpoch ?? 0n;
 
   // Store the shuffled order once, don't reshuffle on re-renders
   const shuffledOrderRef = useRef<string[] | null>(null);
@@ -113,6 +131,10 @@ export function ValidatorSelect({
     // Map all validators to display format
     const result: DisplayValidator[] = validators.map((v) => {
       const isIota = isIotaValidator(v.name, v.address);
+      const stakedInEpoch = stakedInEpochMap.get(v.address.toLowerCase()) ?? 0n;
+      // Check if validator has reached the max stake per epoch limit
+      const reachedEpochLimit = maxStakePerEpoch > 0n && stakedInEpoch >= maxStakePerEpoch;
+
       return {
         id: v.address,
         name: v.name,
@@ -121,6 +143,8 @@ export function ValidatorSelect({
         votingPower: v.votingPower || 0,
         isIotaGroup: isIota,
         groupVotingPower: isIota ? iotaGroupVotingPower : v.votingPower || 0,
+        stakedInEpoch,
+        reachedEpochLimit,
       };
     });
 
@@ -149,7 +173,7 @@ export function ValidatorSelect({
     });
 
     return result;
-  }, [validators]);
+  }, [validators, stakedInEpochMap, maxStakePerEpoch]);
 
   const toggleValidator = (displayValidator: DisplayValidator) => {
     const address = displayValidator.address;
@@ -180,6 +204,10 @@ export function ValidatorSelect({
     (v) => v.groupVotingPower / 100 >= MAX_VOTING_POWER_PERCENT
   ).length;
 
+  const disabledByEpochLimit = displayValidators.filter(
+    (v) => v.reachedEpochLimit
+  ).length;
+
   return (
     <div className="space-y-3">
       {/* Mode Toggle */}
@@ -202,18 +230,47 @@ export function ValidatorSelect({
 
       {/* Auto Mode */}
       {mode === "auto" && (
-        <div className="flex flex-wrap gap-2">
-          {DEFAULT_VALIDATORS.map((v) => {
-            const validatorData = validators.find(
-              (val) => val.address.toLowerCase() === v.address.toLowerCase()
-            );
-            return (
-              <div key={v.address} className="stat-chip">
-                <ValidatorAvatar imageUrl={validatorData?.imageUrl} name={v.name} />
-                <span className="value">{v.name}</span>
-              </div>
-            );
-          })}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {DEFAULT_VALIDATORS.map((v) => {
+              const validatorData = validators.find(
+                (val) => val.address.toLowerCase() === v.address.toLowerCase()
+              );
+              const stakedInEpoch = stakedInEpochMap.get(v.address.toLowerCase()) ?? 0n;
+              const hasReachedLimit = maxStakePerEpoch > 0n && stakedInEpoch >= maxStakePerEpoch;
+
+              return (
+                <div
+                  key={v.address}
+                  className={`stat-chip ${hasReachedLimit ? "!border-amber-500/30 !bg-amber-900/10" : ""}`}
+                  title={hasReachedLimit ? `Reached max stake per epoch (${formatIota(stakedInEpoch)} / ${formatIota(maxStakePerEpoch)} IOTA)` : undefined}
+                >
+                  <ValidatorAvatar imageUrl={validatorData?.imageUrl} name={v.name} />
+                  <span className={`value ${hasReachedLimit ? "text-amber-400" : ""}`}>{v.name}</span>
+                  {hasReachedLimit && (
+                    <svg className="w-3 h-3 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Warning if any default validator reached epoch limit */}
+          {DEFAULT_VALIDATORS.some((v) => {
+            const stakedInEpoch = stakedInEpochMap.get(v.address.toLowerCase()) ?? 0n;
+            return maxStakePerEpoch > 0n && stakedInEpoch >= maxStakePerEpoch;
+          }) && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-xs text-amber-200/80">
+                <span className="font-medium text-amber-300">Warning:</span>{" "}
+                Some validators have reached the max stake per epoch limit. Consider using Manual mode or waiting for the next epoch.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -273,26 +330,31 @@ export function ValidatorSelect({
                   const groupVotingPowerPercent = validator.groupVotingPower / 100;
                   // Use group voting power for IOTA validators, individual for others
                   const isTooMuchPower = groupVotingPowerPercent >= MAX_VOTING_POWER_PERCENT;
+                  const hasReachedEpochLimit = validator.reachedEpochLimit;
                   const isDisabledByLimit = !isSelected && isAtLimit;
-                  const isDisabled = isDisabledByLimit || isTooMuchPower;
+                  const isDisabled = isDisabledByLimit || isTooMuchPower || hasReachedEpochLimit;
 
                   // Build tooltip message
                   const tooltipMessage = isTooMuchPower
                     ? validator.isIotaGroup
                       ? `Disabled: IOTA group combined voting power (${groupVotingPowerPercent.toFixed(1)}%) exceeds ${MAX_VOTING_POWER_PERCENT}% limit`
                       : `Disabled: ${votingPowerPercent.toFixed(1)}% voting power exceeds ${MAX_VOTING_POWER_PERCENT}% limit`
+                    : hasReachedEpochLimit
+                    ? `Disabled: Reached max stake per epoch (${formatIota(validator.stakedInEpoch)} / ${formatIota(maxStakePerEpoch)} IOTA)`
                     : undefined;
 
                   return (
                     <button
                       key={validator.id}
                       type="button"
-                      onClick={() => !isTooMuchPower && toggleValidator(validator)}
+                      onClick={() => !isTooMuchPower && !hasReachedEpochLimit && toggleValidator(validator)}
                       disabled={isDisabled}
                       className={`validator-card-compact flex items-center gap-1.5 ${
                         isSelected ? "selected" : ""
                       } ${isDisabled ? "opacity-40 cursor-not-allowed" : ""} ${
                         isTooMuchPower ? "!border-red-500/30 !bg-red-900/10" : ""
+                      } ${
+                        hasReachedEpochLimit && !isTooMuchPower ? "!border-amber-500/30 !bg-amber-900/10" : ""
                       }`}
                       title={tooltipMessage}
                     >
@@ -303,6 +365,8 @@ export function ValidatorSelect({
                             ? "bg-[var(--accent-primary)] border-[var(--accent-primary)]"
                             : isTooMuchPower
                             ? "border-red-500/50"
+                            : hasReachedEpochLimit
+                            ? "border-amber-500/50"
                             : "border-[var(--text-muted)]"
                         }`}
                       >
@@ -316,12 +380,17 @@ export function ValidatorSelect({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         )}
+                        {hasReachedEpochLimit && !isTooMuchPower && !isSelected && (
+                          <svg className="w-2 h-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01" />
+                          </svg>
+                        )}
                       </div>
                       {/* Validator Icon */}
                       <ValidatorAvatar imageUrl={validator.imageUrl} name={validator.name} />
                       {/* Name */}
                       <span className={`font-medium text-xs truncate flex-1 ${
-                        isTooMuchPower ? "text-red-400/70" : "text-[var(--text-primary)]"
+                        isTooMuchPower ? "text-red-400/70" : hasReachedEpochLimit ? "text-amber-400/70" : "text-[var(--text-primary)]"
                       }`}>
                         {validator.name}
                       </span>
@@ -350,6 +419,11 @@ export function ValidatorSelect({
           {disabledByVotingPower > 0 && (
             <p className="text-[10px] text-[var(--text-muted)] text-center">
               {disabledByVotingPower} validator{disabledByVotingPower > 1 ? "s" : ""} disabled due to high voting power (&gt;{MAX_VOTING_POWER_PERCENT}% individual or group)
+            </p>
+          )}
+          {disabledByEpochLimit > 0 && (
+            <p className="text-[10px] text-amber-400/70 text-center">
+              {disabledByEpochLimit} validator{disabledByEpochLimit > 1 ? "s" : ""} reached max stake per epoch ({formatIota(maxStakePerEpoch)} IOTA)
             </p>
           )}
         </div>

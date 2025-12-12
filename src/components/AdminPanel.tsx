@@ -40,6 +40,7 @@ import {
   buildUpdateThresholdTx,
   buildSetPauseTx,
   buildCollectFeeTx,
+  buildChangeMaxStakePerEpochTx,
   buildUpdateValidatorsTx,
   buildUpdateRewardsTx,
   buildRebalanceTx,
@@ -49,6 +50,7 @@ import {
 import { formatIota, parseIota, formatPercent, formatRelativeTime, truncateAddress } from "@/lib/utils";
 import { useProtocolStakes } from "@/hooks/useProtocolStakes";
 import { useValidators } from "@/hooks/useValidators";
+import { StakeHistoryPanel } from "./StakeHistoryPanel";
 
 export function AdminPanel() {
   const account = useCurrentAccount();
@@ -87,6 +89,7 @@ export function AdminPanel() {
 
   // Owner form state
   const [minStake, setMinStake] = useState("");
+  const [maxStakePerEpoch, setMaxStakePerEpoch] = useState("");
   const [rewardFee, setRewardFee] = useState("");
   const [threshold, setThreshold] = useState("");
   const [feeRecipient, setFeeRecipient] = useState("");
@@ -299,6 +302,9 @@ export function AdminPanel() {
           )}
         </div>
 
+        {/* Stake History & Vaults Panel */}
+        <StakeHistoryPanel />
+
         <div className="border-t border-gray-800" />
 
         {/* Owner Functions */}
@@ -341,6 +347,49 @@ export function AdminPanel() {
                     executeTx(tx, "Min stake updated!");
                   }}
                   disabled={isPending || !minStake}
+                  className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors h-fit"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+
+            {/* Max Stake Per Validator Per Epoch */}
+            <div className="p-4 bg-gray-800/30 rounded-lg space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-200">
+                  Max Stake Per Validator Per Epoch
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum amount of IOTA that can be staked to a single validator in one epoch.
+                  This limit helps distribute stake across validators and prevents concentration.
+                  Only applies to the internal stake_pool() distribution, not user-chosen validators.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={maxStakePerEpoch}
+                    onChange={(e) => setMaxStakePerEpoch(e.target.value)}
+                    placeholder="50000000"
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-purple-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Current: {poolState ? formatIota(poolState.maxValidatorStakePerEpoch) : "..."} IOTA
+                    {poolState && poolState.maxValidatorStakePerEpoch > 0n && (
+                      <span className="text-gray-600 ml-1">
+                        ({(Number(poolState.maxValidatorStakePerEpoch) / 1e9 / 1e6).toFixed(0)}M)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const tx = buildChangeMaxStakePerEpochTx(parseIota(maxStakePerEpoch), ownerCapId);
+                    executeTx(tx, "Max stake per epoch updated!");
+                  }}
+                  disabled={isPending || !maxStakePerEpoch}
                   className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors h-fit"
                 >
                   Update

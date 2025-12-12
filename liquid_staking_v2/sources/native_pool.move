@@ -203,8 +203,12 @@ module tokenlabs_liquid_stake::native_pool {
         self.base_reward_fee = value;
     }
 
-    // Function to change max_validator_stake_per_epoch
-    public(package) fun change_max_validator_stake_per_epoch(self: &mut NativePool, _owner_cap: &OwnerCap, value: u64) {
+    // Function to change max_validator_stake_per_epoch (Owner only)
+    public entry fun change_max_validator_stake_per_epoch(self: &mut NativePool, _owner_cap: &OwnerCap, value: u64) {
+        assert_version(self);
+        // Minimum 1 IOTA per validator per epoch
+        assert!(value >= ONE_IOTA, E_LIMIT_TOO_LOW);
+
         event::emit(MaxValidatorStakePerEpochChangedEvent {
             prev_value: self.max_validator_stake_per_epoch,
             new_value: value,
