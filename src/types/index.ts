@@ -22,6 +22,7 @@ export interface ValidatorInfo {
   priority?: number;
   apy?: number;
   totalStake?: bigint;
+  votingPower?: number;
 }
 
 // Token metadata

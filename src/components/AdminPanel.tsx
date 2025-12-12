@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSignAndExecuteTransaction, useCurrentAccount } from "@iota/dapp-kit";
 import { useAdminCaps } from "@/hooks/useAdmin";
 import { usePoolData } from "@/hooks/usePoolData";
@@ -54,7 +54,19 @@ export function AdminPanel() {
   const account = useCurrentAccount();
   const { hasOwnerCap, hasOperatorCap, ownerCapId, operatorCapId, isLoading: capsLoading } = useAdminCaps();
   const { poolState, refetch: refetchPool } = usePoolData();
-  const { stakes: protocolStakes, totalProtocolStake } = useProtocolStakes();
+  const { stakes: protocolStakesRaw, totalProtocolStake } = useProtocolStakes();
+
+  // Sort by priority (descending), then by registration order (ascending)
+  const protocolStakes = useMemo(() => {
+    return [...protocolStakesRaw].sort((a, b) => {
+      // First sort by priority (higher first)
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+      }
+      // Then by registration order (earlier first)
+      return a.registrationOrder - b.registrationOrder;
+    });
+  }, [protocolStakesRaw]);
   const { validators: systemValidators } = useValidators();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
 
@@ -183,9 +195,10 @@ export function AdminPanel() {
               {/* Table Header */}
               <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium uppercase tracking-wider">
                 <div className="col-span-3">Validator</div>
-                <div className="col-span-3">Address</div>
+                <div className="col-span-2">Address</div>
+                <div className="col-span-2 text-right">Voting Power</div>
                 <div className="col-span-2 text-right">Staked</div>
-                <div className="col-span-2 text-center">Priority</div>
+                <div className="col-span-1 text-center">P</div>
                 <div className="col-span-2 text-center">Status</div>
               </div>
 
@@ -214,7 +227,7 @@ export function AdminPanel() {
                       </div>
 
                       {/* Address */}
-                      <div className="col-span-3 flex items-center gap-1">
+                      <div className="col-span-2 flex items-center gap-1">
                         <span className="text-xs text-gray-500 mono">
                           {stake.address.slice(0, 6)}...{stake.address.slice(-4)}
                         </span>
@@ -233,6 +246,13 @@ export function AdminPanel() {
                         </button>
                       </div>
 
+                      {/* Voting Power */}
+                      <div className="col-span-2 text-right">
+                        <span className="text-sm font-medium text-blue-400 mono">
+                          {(stake.votingPower / 100).toFixed(2)}%
+                        </span>
+                      </div>
+
                       {/* Staked */}
                       <div className="col-span-2 text-right">
                         <span className="text-sm font-medium text-gray-300 mono">
@@ -241,9 +261,9 @@ export function AdminPanel() {
                       </div>
 
                       {/* Priority */}
-                      <div className="col-span-2 text-center">
+                      <div className="col-span-1 text-center">
                         <span
-                          className={`inline-flex items-center justify-center w-10 h-6 rounded text-xs font-bold ${
+                          className={`inline-flex items-center justify-center w-8 h-6 rounded text-xs font-bold ${
                             isBanned
                               ? "bg-red-900/50 text-red-400"
                               : isHighPriority

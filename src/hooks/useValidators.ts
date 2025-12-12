@@ -18,13 +18,14 @@ export function useValidators() {
       imageUrl: v.imageUrl || undefined,
       apy: v.stakingPoolIotaBalance ? parseFloat(v.stakingPoolIotaBalance) : undefined,
       totalStake: BigInt(v.stakingPoolIotaBalance || "0"),
+      votingPower: v.votingPower ? parseInt(v.votingPower) : 0,
     }));
 
-    // Sort by stake (descending)
+    // Sort by voting power (descending)
     validators.sort((a, b) => {
-      const stakeA = a.totalStake || 0n;
-      const stakeB = b.totalStake || 0n;
-      return stakeB > stakeA ? 1 : stakeB < stakeA ? -1 : 0;
+      const vpA = a.votingPower || 0;
+      const vpB = b.votingPower || 0;
+      return vpB - vpA;
     });
   }
 

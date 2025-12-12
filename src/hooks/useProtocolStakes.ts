@@ -8,6 +8,8 @@ export interface ValidatorStake {
   address: string;
   totalStaked: bigint;
   priority: number;
+  votingPower: number;
+  registrationOrder: number; // Order in which validator was added to protocol
 }
 
 export function useProtocolStakes() {
@@ -16,14 +18,26 @@ export function useProtocolStakes() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["protocolStakes", POOL_ID],
     queryFn: async () => {
-      // Get the pool object with all nested content
-      const poolObj = await client.getObject({
-        id: POOL_ID,
-        options: { showContent: true },
-      });
+      // Fetch pool object and system state in parallel
+      const [poolObj, systemState] = await Promise.all([
+        client.getObject({
+          id: POOL_ID,
+          options: { showContent: true },
+        }),
+        client.getLatestIotaSystemState(),
+      ]);
 
       if (poolObj.data?.content?.dataType !== "moveObject") {
         return [];
+      }
+
+      // Build voting power map from system validators
+      const votingPowerMap = new Map<string, number>();
+      for (const v of systemState.activeValidators) {
+        votingPowerMap.set(
+          v.iotaAddress.toLowerCase(),
+          v.votingPower ? parseInt(v.votingPower) : 0
+        );
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +72,8 @@ export function useProtocolStakes() {
           address,
           totalStaked: 0n,
           priority: validatorData.get(address)?.priority ?? 0,
+          votingPower: votingPowerMap.get(address.toLowerCase()) ?? 0,
+          registrationOrder: validatorData.get(address)?.order ?? 999,
         }));
       }
 
@@ -99,6 +115,8 @@ export function useProtocolStakes() {
               address: validatorAddress,
               totalStaked,
               priority: validatorData.get(validatorAddress.toLowerCase())?.priority ?? 0,
+              votingPower: votingPowerMap.get(validatorAddress.toLowerCase()) ?? 0,
+              registrationOrder: validatorData.get(validatorAddress.toLowerCase())?.order ?? 999,
             });
             foundAddresses.add(validatorAddress.toLowerCase());
           }
@@ -114,25 +132,14 @@ export function useProtocolStakes() {
             address: addr,
             totalStaked: 0n,
             priority: validatorData.get(addr.toLowerCase())?.priority ?? 0,
+            votingPower: votingPowerMap.get(addr.toLowerCase()) ?? 0,
+            registrationOrder: validatorData.get(addr.toLowerCase())?.order ?? 999,
           });
         }
       }
 
-      // Sort by priority (descending), then by registration order (ascending)
-      stakes.sort((a, b) => {
-        const priorityA = a.priority;
-        const priorityB = b.priority;
-
-        // First sort by priority (higher first)
-        if (priorityA !== priorityB) {
-          return priorityB - priorityA;
-        }
-
-        // Then by registration order (earlier first)
-        const orderA = validatorData.get(a.address.toLowerCase())?.order ?? 999;
-        const orderB = validatorData.get(b.address.toLowerCase())?.order ?? 999;
-        return orderA - orderB;
-      });
+      // Sort by voting power (descending)
+      stakes.sort((a, b) => b.votingPower - a.votingPower);
 
       return stakes;
     },
