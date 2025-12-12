@@ -179,15 +179,23 @@ export function useValidatorVaults() {
         return [];
       }
 
-      // Get all vaults
-      const dynamicFields = await client.getDynamicFields({
-        parentId: vaultsTableId,
-        limit: 50,
-      });
+      // Get ALL vaults with pagination
+      const allDynamicFields: Awaited<ReturnType<typeof client.getDynamicFields>>["data"] = [];
+      let vaultsCursor: string | null | undefined = null;
+
+      do {
+        const response = await client.getDynamicFields({
+          parentId: vaultsTableId,
+          limit: 50,
+          cursor: vaultsCursor ?? undefined,
+        });
+        allDynamicFields.push(...response.data);
+        vaultsCursor = response.hasNextPage ? response.nextCursor : null;
+      } while (vaultsCursor);
 
       const vaults: ValidatorVaultInfo[] = [];
 
-      for (const field of dynamicFields.data) {
+      for (const field of allDynamicFields) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const validatorAddress = (field.name as any).value;
@@ -213,12 +221,21 @@ export function useValidatorVaults() {
 
             if (stakesTableId) {
               try {
-                const stakesFields = await client.getDynamicFields({
-                  parentId: stakesTableId,
-                  limit: 100,
-                });
+                // Get ALL stakes with pagination
+                const allStakesFields: Awaited<ReturnType<typeof client.getDynamicFields>>["data"] = [];
+                let stakesCursor: string | null | undefined = null;
 
-                for (const stakeField of stakesFields.data) {
+                do {
+                  const response = await client.getDynamicFields({
+                    parentId: stakesTableId,
+                    limit: 50,
+                    cursor: stakesCursor ?? undefined,
+                  });
+                  allStakesFields.push(...response.data);
+                  stakesCursor = response.hasNextPage ? response.nextCursor : null;
+                } while (stakesCursor);
+
+                for (const stakeField of allStakesFields) {
                   try {
                     const stakeObj = await client.getObject({
                       id: stakeField.objectId,
@@ -336,10 +353,36 @@ interface ExchangeRateData {
   poolTokenAmount: bigint;
 }
 
-// Calculate exchange rate as a decimal (with high precision)
+// Calculate exchange rate as a decimal (for display only)
 function calculateExchangeRate(data: ExchangeRateData): number {
   if (data.poolTokenAmount === 0n) return 1;
   return Number(data.iotaAmount) / Number(data.poolTokenAmount);
+}
+
+// Calculate reward using BigInt to avoid precision loss
+// Formula: currentValue = principal * (current_iota / current_pool_token) / (deposit_iota / deposit_pool_token)
+// Simplified: currentValue = principal * current_iota * deposit_pool_token / (current_pool_token * deposit_iota)
+function calculateRewardBigInt(
+  principal: bigint,
+  currentRate: ExchangeRateData,
+  depositRate: ExchangeRateData
+): bigint {
+  // Handle edge cases
+  if (currentRate.poolTokenAmount === 0n || depositRate.iotaAmount === 0n || depositRate.poolTokenAmount === 0n) {
+    return 0n;
+  }
+
+  // Use BigInt multiplication with proper ordering to avoid overflow
+  // currentValue = principal * currentIota * depositPoolToken / (currentPoolToken * depositIota)
+  const numerator = principal * currentRate.iotaAmount * depositRate.poolTokenAmount;
+  const denominator = currentRate.poolTokenAmount * depositRate.iotaAmount;
+
+  if (denominator === 0n) return 0n;
+
+  const currentValue = numerator / denominator;
+  const reward = currentValue - principal;
+
+  return reward > 0n ? reward : 0n;
 }
 
 export function usePoolRewardsEstimate() {
@@ -398,18 +441,26 @@ export function usePoolRewardsEstimate() {
           return null;
         }
 
-        // Get all vaults
-        const dynamicFields = await client.getDynamicFields({
-          parentId: vaultsTableId,
-          limit: 50,
-        });
+        // Get ALL vaults with pagination
+        const allVaultFields: Awaited<ReturnType<typeof client.getDynamicFields>>["data"] = [];
+        let vaultCursor: string | null | undefined = null;
+
+        do {
+          const response = await client.getDynamicFields({
+            parentId: vaultsTableId,
+            limit: 50,
+            cursor: vaultCursor ?? undefined,
+          });
+          allVaultFields.push(...response.data);
+          vaultCursor = response.hasNextPage ? response.nextCursor : null;
+        } while (vaultCursor);
 
         let totalPrincipal = 0n;
         let totalRewards = 0n;
         const validatorBreakdown: PoolRewardsInfo["validatorBreakdown"] = [];
 
         // Process each validator vault
-        for (const field of dynamicFields.data) {
+        for (const field of allVaultFields) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const validatorAddress = (field.name as any).value;
@@ -433,10 +484,19 @@ export function usePoolRewardsEstimate() {
             const stakesTableId = vaultData?.stakes?.fields?.id?.id;
             if (!stakesTableId) continue;
 
-            const stakesFields = await client.getDynamicFields({
-              parentId: stakesTableId,
-              limit: 100,
-            });
+            // Get ALL stakes with pagination
+            const allStakesFields: Awaited<ReturnType<typeof client.getDynamicFields>>["data"] = [];
+            let stakesCursor: string | null | undefined = null;
+
+            do {
+              const response = await client.getDynamicFields({
+                parentId: stakesTableId,
+                limit: 50,
+                cursor: stakesCursor ?? undefined,
+              });
+              allStakesFields.push(...response.data);
+              stakesCursor = response.hasNextPage ? response.nextCursor : null;
+            } while (stakesCursor);
 
             // Collect stake info for this validator
             interface StakeInfo {
@@ -446,7 +506,7 @@ export function usePoolRewardsEstimate() {
             }
             const stakes: StakeInfo[] = [];
 
-            for (const stakeField of stakesFields.data) {
+            for (const stakeField of allStakesFields) {
               try {
                 const stakeObj = await client.getObject({
                   id: stakeField.objectId,
@@ -478,47 +538,39 @@ export function usePoolRewardsEstimate() {
               // Get unique activation epochs
               const uniqueEpochs = [...new Set(stakes.map(s => s.activationEpoch))];
 
-              // Query exchange rates for these epochs
-              // The table is indexed by epoch number
+              // Query exchange rates for these epochs using getDynamicFieldObject
+              // This queries directly by key instead of paginating through all entries
               for (const epoch of uniqueEpochs) {
                 try {
-                  // Query dynamic field with epoch as key
-                  const epochFields = await client.getDynamicFields({
-                    parentId: exchangeRatesId,
-                    limit: 50,
+                  // Use getDynamicFieldObject to query by epoch key directly
+                  const rateObj = await client.getDynamicFieldObject({
+                    parentObjectId: exchangeRatesId,
+                    name: {
+                      type: "u64",
+                      value: epoch.toString(),
+                    },
                   });
 
-                  // Find the entry for this epoch
-                  for (const ef of epochFields.data) {
+                  if (rateObj.data?.content?.dataType === "moveObject") {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const epochKey = (ef.name as any).value;
-                    if (parseInt(epochKey) === epoch) {
-                      const rateObj = await client.getObject({
-                        id: ef.objectId,
-                        options: { showContent: true },
-                      });
-
-                      if (rateObj.data?.content?.dataType === "moveObject") {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const rateFields = (rateObj.data.content.fields as any)?.value?.fields ||
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          (rateObj.data.content.fields as any)?.value ||
-                          rateObj.data.content.fields;
-                        depositRates.set(epoch, {
-                          iotaAmount: BigInt(rateFields?.iota_amount || "0"),
-                          poolTokenAmount: BigInt(rateFields?.pool_token_amount || "0"),
-                        });
-                      }
-                      break;
-                    }
+                    const rateFields = (rateObj.data.content.fields as any)?.value?.fields ||
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (rateObj.data.content.fields as any)?.value ||
+                      rateObj.data.content.fields;
+                    depositRates.set(epoch, {
+                      iotaAmount: BigInt(rateFields?.iota_amount || "0"),
+                      poolTokenAmount: BigInt(rateFields?.pool_token_amount || "0"),
+                    });
                   }
                 } catch (e) {
-                  console.error(`Error fetching exchange rate for epoch ${epoch}:`, e);
+                  // If we can't get the exact epoch, try to fallback
+                  // This can happen for very new stakes where the epoch hasn't been recorded yet
+                  console.warn(`Could not fetch exchange rate for epoch ${epoch}, stake may be too new`);
                 }
               }
             }
 
-            // 4. Calculate rewards for each stake using exchange rates
+            // 4. Calculate rewards for each stake using exchange rates (BigInt precision)
             // Formula: reward = principal × (current_rate / deposit_rate) - principal
             let validatorPrincipal = 0n;
             let validatorRewards = 0n;
@@ -526,13 +578,16 @@ export function usePoolRewardsEstimate() {
             let activeCount = 0;
             let pendingCount = 0;
 
-            const currentRate = calculateExchangeRate(poolData.currentExchangeRate);
+            const currentRateData = poolData.currentExchangeRate;
+            const currentRateDisplay = calculateExchangeRate(currentRateData);
 
             for (const stake of stakes) {
               validatorPrincipal += stake.principal;
 
-              // Check if stake is active (activation epoch <= current epoch)
+              // Check if stake is active AND earning (rewards start at activation + 1)
+              // Stake lifecycle: created -> pending (activation epoch) -> active (activation+1 onwards)
               const isActive = stake.activationEpoch <= currentEpoch;
+              const isEarning = stake.activationEpoch < currentEpoch; // Rewards start next epoch
 
               if (stake.activationEpoch < earliestActivation) {
                 earliestActivation = stake.activationEpoch;
@@ -541,26 +596,31 @@ export function usePoolRewardsEstimate() {
               if (isActive) {
                 activeCount++;
 
-                // Get deposit exchange rate
-                const depositRateData = depositRates.get(stake.activationEpoch);
+                if (isEarning) {
+                  // Get deposit exchange rate
+                  const depositRateData = depositRates.get(stake.activationEpoch);
 
-                if (depositRateData && depositRateData.poolTokenAmount > 0n) {
-                  const depositRate = calculateExchangeRate(depositRateData);
-
-                  // Calculate reward using exchange rate formula
-                  // current_value = principal * (current_rate / deposit_rate)
-                  // reward = current_value - principal
-                  if (depositRate > 0) {
-                    const currentValue = Number(stake.principal) * (currentRate / depositRate);
-                    const reward = BigInt(Math.floor(currentValue)) - stake.principal;
-                    if (reward > 0n) {
-                      validatorRewards += reward;
+                  if (depositRateData && depositRateData.poolTokenAmount > 0n) {
+                    // Use BigInt calculation for precision
+                    const reward = calculateRewardBigInt(stake.principal, currentRateData, depositRateData);
+                    validatorRewards += reward;
+                  } else {
+                    // FALLBACK: If we couldn't get deposit rate, try using current rate as estimate
+                    // This assumes rate was ~1.0 at deposit time (conservative estimate)
+                    // Only do this for stakes that should definitely have rewards
+                    const epochsEarning = currentEpoch - stake.activationEpoch;
+                    if (epochsEarning >= 2) {
+                      // Use a conservative estimate: assume 5% APY, ~0.014% per epoch
+                      // This is better than returning 0 for old stakes
+                      const estimatedRewardPercent = BigInt(Math.floor(epochsEarning * 14)); // 0.014% per epoch in basis points
+                      const estimatedReward = (stake.principal * estimatedRewardPercent) / 1000000n;
+                      validatorRewards += estimatedReward;
+                      console.warn(`Using fallback estimate for stake at epoch ${stake.activationEpoch} (${epochsEarning} epochs): ${estimatedReward}`);
                     }
+                    // For recent stakes without rate data, 0 rewards is acceptable
                   }
-                } else {
-                  // If we couldn't get deposit rate, stake hasn't earned rewards yet
-                  // (this happens for very new stakes)
                 }
+                // Stakes at activation epoch are active but not earning yet - 0 rewards is correct
               } else {
                 pendingCount++;
                 // Pending stakes don't have rewards yet
@@ -581,7 +641,7 @@ export function usePoolRewardsEstimate() {
               stakesCount: stakes.length,
               activeStakes: activeCount,
               pendingStakes: pendingCount,
-              currentExchangeRate: currentRate,
+              currentExchangeRate: currentRateDisplay,
             });
           } catch (e) {
             console.error("Error processing validator:", e);

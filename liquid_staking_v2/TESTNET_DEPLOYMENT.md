@@ -5,37 +5,29 @@
 | Field | Value |
 |-------|-------|
 | **Network** | IOTA Testnet |
-| **Transaction Digest** | `AjkYfvXD8dct8oumjeWZKZhRNDSWwkYz4rKqfng1FFnn` |
 | **Deployed At** | 2025-12-11 |
-| **Epoch** | 388 |
-| **Gas Cost** | ~0.113 IOTA |
+| **Version** | v3 (tIOTA name) |
 
 ## Package & Object IDs
 
 ### Package
 | Field | Value |
 |-------|-------|
-| **Package ID** | `0xba81891eeff123b0d3272d71b8acf63498330977c79392e8935d4387d27c5e2b` |
-| **Version** | 1 |
+| **Package ID** | `0xfb784a42f5a09475a72df201b6d0053911c7639bfc073b5895e2875ec6c156d4` |
+| **Version** | 3 |
 | **Modules** | cert, math, native_pool, ownership, validator_set |
 
 ### Shared Objects (Used by all users)
 | Object | ID | Description |
 |--------|-----|-------------|
-| **NativePool** | `0x837a7836002846d5d62ed9594d9daf69604cf3ee89e2bd0016b5438691f0fc6f` | Main staking pool |
-| **Metadata<CERT>** | `0xa3dce3a6281d486ebab3695b5bdb3aabf584bad15e0a655df419b57e70124b53` | tIOTA token metadata & supply |
+| **NativePool** | `0x8f0cf942f3dd1cfa14288ac6a1b81f94bbb87ee77ace13c762b0dc770dfcafe6` | Main staking pool |
+| **Metadata<CERT>** | `0x19286e9d5eaee1a434e9dbe2e349165e1b73d3e8e7afb77aac89f8c7fb317f78` | tIOTA token metadata & supply |
 
 ### Admin Objects (Owner wallet only)
 | Object | ID | Description |
 |--------|-----|-------------|
-| **OwnerCap** | `0x54ee5a58eb325bc02559f5258a9d3c946f98ca4ebd6ee43cdcbe7b90c70a2891` | Admin capability |
-| **OperatorCap** | `0xe84406ca09529447efa584a14260df48f50c9998a2ed642d7f2683473cd5b02b` | Operator capability |
-| **UpgradeCap** | `0x1602716d94431052cbc442f17bb21c76e89b85c026ddbbf76a3b9df5cf744b9c` | Package upgrade capability |
-
-### Immutable Objects
-| Object | ID | Description |
-|--------|-----|-------------|
-| **CoinMetadata** | `0x21130a4173ea9f17303913020599df9098432512e0f946db8936647f27b37757` | CERT token metadata |
+| **OwnerCap** | `0x5b449bf4653a379e10774800d1d7e4217297536973dc7df6a03b288f655b74d3` | Admin capability |
+| **OperatorCap** | `0xc60ee47357fa37374e3876e3e7f3636c80db72a1e1eea8a048dd9e1b7bf98915` | Operator capability |
 
 ## Wallet Information
 
@@ -48,19 +40,18 @@
 
 ## Explorer Links
 
-- **Package**: https://explorer.rebased.iota.org/object/0xba81891eeff123b0d3272d71b8acf63498330977c79392e8935d4387d27c5e2b?network=testnet
-- **NativePool**: https://explorer.rebased.iota.org/object/0x837a7836002846d5d62ed9594d9daf69604cf3ee89e2bd0016b5438691f0fc6f?network=testnet
-- **Transaction**: https://explorer.rebased.iota.org/txblock/AjkYfvXD8dct8oumjeWZKZhRNDSWwkYz4rKqfng1FFnn?network=testnet
+- **Package**: https://explorer.rebased.iota.org/object/0xfb784a42f5a09475a72df201b6d0053911c7639bfc073b5895e2875ec6c156d4?network=testnet
+- **NativePool**: https://explorer.rebased.iota.org/object/0x8f0cf942f3dd1cfa14288ac6a1b81f94bbb87ee77ace13c762b0dc770dfcafe6?network=testnet
 
 ## CLI Commands for Testing
 
 ### Environment Variables (for convenience)
 ```bash
-export PACKAGE=0xba81891eeff123b0d3272d71b8acf63498330977c79392e8935d4387d27c5e2b
-export POOL=0x837a7836002846d5d62ed9594d9daf69604cf3ee89e2bd0016b5438691f0fc6f
-export METADATA=0xa3dce3a6281d486ebab3695b5bdb3aabf584bad15e0a655df419b57e70124b53
-export OWNER_CAP=0x54ee5a58eb325bc02559f5258a9d3c946f98ca4ebd6ee43cdcbe7b90c70a2891
-export OPERATOR_CAP=0xe84406ca09529447efa584a14260df48f50c9998a2ed642d7f2683473cd5b02b
+export PACKAGE=0xfb784a42f5a09475a72df201b6d0053911c7639bfc073b5895e2875ec6c156d4
+export POOL=0x8f0cf942f3dd1cfa14288ac6a1b81f94bbb87ee77ace13c762b0dc770dfcafe6
+export METADATA=0x19286e9d5eaee1a434e9dbe2e349165e1b73d3e8e7afb77aac89f8c7fb317f78
+export OWNER_CAP=0x5b449bf4653a379e10774800d1d7e4217297536973dc7df6a03b288f655b74d3
+export OPERATOR_CAP=0xc60ee47357fa37374e3876e3e7f3636c80db72a1e1eea8a048dd9e1b7bf98915
 export SYSTEM=0x5
 export CLOCK=0x6
 ```

@@ -84,17 +84,25 @@ export function useProtocolStakes() {
         }));
       }
 
-      // Query all dynamic fields at once to get the vaults
-      const dynamicFields = await client.getDynamicFields({
-        parentId: vaultsTableId,
-        limit: 50,
-      });
+      // Query ALL dynamic fields with pagination to get all vaults
+      const allDynamicFields: Awaited<ReturnType<typeof client.getDynamicFields>>["data"] = [];
+      let cursor: string | null | undefined = null;
+
+      do {
+        const response = await client.getDynamicFields({
+          parentId: vaultsTableId,
+          limit: 50,
+          cursor: cursor ?? undefined,
+        });
+        allDynamicFields.push(...response.data);
+        cursor = response.hasNextPage ? response.nextCursor : null;
+      } while (cursor);
 
       const stakes: ValidatorStake[] = [];
       const foundAddresses = new Set<string>();
 
       // Process each dynamic field (vault)
-      for (const field of dynamicFields.data) {
+      for (const field of allDynamicFields) {
         try {
           // The name contains the validator address
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

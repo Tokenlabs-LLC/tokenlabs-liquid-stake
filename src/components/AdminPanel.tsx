@@ -5,6 +5,54 @@ import { useSignAndExecuteTransaction, useCurrentAccount } from "@iota/dapp-kit"
 import { useAdminCaps } from "@/hooks/useAdmin";
 import { usePoolData } from "@/hooks/usePoolData";
 
+// Validation helpers for production safety
+const MAX_U64 = 18446744073709551615n;
+
+function isValidIotaAddress(addr: string): boolean {
+  return /^0x[a-fA-F0-9]{64}$/.test(addr);
+}
+
+function safeParseIota(input: string): bigint | null {
+  try {
+    if (!input || !/^[0-9.]+$/.test(input.trim())) return null;
+    const parts = input.trim().split(".");
+    if (parts.length > 2) return null;
+    const whole = BigInt(parts[0] || "0");
+    let fraction = 0n;
+    if (parts[1]) {
+      const fracStr = parts[1].padEnd(9, "0").slice(0, 9);
+      fraction = BigInt(fracStr);
+    }
+    const result = whole * 1_000_000_000n + fraction;
+    if (result < 0n || result > MAX_U64) return null;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function safeParsePercent(input: string): number | null {
+  try {
+    if (!input || !/^[0-9.]+$/.test(input.trim())) return null;
+    const value = parseFloat(input.trim());
+    if (isNaN(value) || value < 0 || value > 100) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function safeParseInt(input: string, min: number, max: number): number | null {
+  try {
+    if (!input) return null;
+    const value = parseInt(input.trim());
+    if (isNaN(value) || value < min || value > max) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 // Avatar component with fallback
 function ValidatorAvatar({
   imageUrl,
@@ -47,7 +95,7 @@ import {
   buildTransferOwnerCapTx,
   buildTransferOperatorCapTx,
 } from "@/lib/transactions";
-import { formatIota, parseIota, formatPercent, formatRelativeTime, truncateAddress } from "@/lib/utils";
+import { formatIota, formatPercent, formatRelativeTime, truncateAddress } from "@/lib/utils";
 import { useProtocolStakes } from "@/hooks/useProtocolStakes";
 import { useValidators } from "@/hooks/useValidators";
 import { StakeHistoryPanel } from "./StakeHistoryPanel";
@@ -72,20 +120,26 @@ export function AdminPanel() {
   const { validators: systemValidators } = useValidators();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
 
-  // Create validator name map
-  const getValidatorName = (address: string) => {
-    const validator = systemValidators.find(
-      (v) => v.address.toLowerCase() === address.toLowerCase()
-    );
-    return validator?.name || truncateAddress(address, 6);
-  };
+  // Create memoized validator lookup functions
+  const getValidatorName = useMemo(
+    () => (address: string) => {
+      const validator = systemValidators.find(
+        (v) => v.address.toLowerCase() === address.toLowerCase()
+      );
+      return validator?.name || truncateAddress(address, 6);
+    },
+    [systemValidators]
+  );
 
-  const getValidatorImage = (address: string) => {
-    const validator = systemValidators.find(
-      (v) => v.address.toLowerCase() === address.toLowerCase()
-    );
-    return validator?.imageUrl;
-  };
+  const getValidatorImage = useMemo(
+    () => (address: string) => {
+      const validator = systemValidators.find(
+        (v) => v.address.toLowerCase() === address.toLowerCase()
+      );
+      return validator?.imageUrl;
+    },
+    [systemValidators]
+  );
 
   // Owner form state
   const [minStake, setMinStake] = useState("");
@@ -103,6 +157,20 @@ export function AdminPanel() {
   const [newOwnerAddress, setNewOwnerAddress] = useState("");
   const [newOperatorAddress, setNewOperatorAddress] = useState("");
   const [showDangerZone, setShowDangerZone] = useState(false);
+
+  // Validator search
+  const [validatorSearch, setValidatorSearch] = useState("");
+
+  // Filter validators by search
+  const filteredProtocolStakes = useMemo(() => {
+    if (!validatorSearch.trim()) return protocolStakes;
+    const query = validatorSearch.toLowerCase();
+    return protocolStakes.filter((stake) => {
+      const name = getValidatorName(stake.address).toLowerCase();
+      const address = stake.address.toLowerCase();
+      return name.includes(query) || address.includes(query);
+    });
+  }, [protocolStakes, validatorSearch, getValidatorName]);
 
   // Status
   const [txStatus, setTxStatus] = useState<{
@@ -125,9 +193,11 @@ export function AdminPanel() {
             message: `${successMsg} TX: ${result.digest.slice(0, 10)}...`,
           });
           setTimeout(refetchPool, 2000);
+          setTimeout(() => setTxStatus({ type: null, message: "" }), 5000);
         },
         onError: (error) => {
           setTxStatus({ type: "error", message: `Failed: ${error.message}` });
+          setTimeout(() => setTxStatus({ type: null, message: "" }), 8000);
         },
       }
     );
@@ -176,8 +246,8 @@ export function AdminPanel() {
       <div className="p-6 space-y-8">
         {/* Protocol Validators Overview */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
               <h3 className="text-lg font-medium text-gray-200">Protocol Validators</h3>
               <p className="text-sm text-gray-500 mt-1">
                 Validators registered in the protocol with their stake and priority
@@ -189,9 +259,45 @@ export function AdminPanel() {
             </div>
           </div>
 
-          {protocolStakes.length === 0 ? (
+          {/* Search Input */}
+          <div className="flex items-center gap-3">
+            <div className="relative max-w-sm flex-1">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={validatorSearch}
+                onChange={(e) => setValidatorSearch(e.target.value)}
+                placeholder="Search by name or address..."
+                className="w-full pl-10 pr-10 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {validatorSearch && (
+                <button
+                  onClick={() => setValidatorSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {validatorSearch.trim() && (
+              <span className="text-xs text-gray-500">
+                {filteredProtocolStakes.length} of {protocolStakes.length}
+              </span>
+            )}
+          </div>
+
+          {filteredProtocolStakes.length === 0 ? (
             <div className="p-4 bg-gray-800/30 rounded-lg text-center text-gray-500 text-sm">
-              No validators registered
+              {validatorSearch.trim() ? "No validators match your search" : "No validators registered"}
             </div>
           ) : (
             <div className="bg-gray-800/30 rounded-lg overflow-hidden">
@@ -207,7 +313,7 @@ export function AdminPanel() {
 
               {/* Table Body */}
               <div className="divide-y divide-gray-800/50 max-h-64 overflow-y-auto">
-                {protocolStakes.map((stake) => {
+                {filteredProtocolStakes.map((stake) => {
                   const isBanned = stake.priority === 0;
                   const isHighPriority = stake.priority >= 100;
 
@@ -343,7 +449,12 @@ export function AdminPanel() {
                 </div>
                 <button
                   onClick={() => {
-                    const tx = buildChangeMinStakeTx(parseIota(minStake), ownerCapId);
+                    const parsed = safeParseIota(minStake);
+                    if (!parsed) {
+                      setTxStatus({ type: "error", message: "Invalid amount. Use format: 1.5" });
+                      return;
+                    }
+                    const tx = buildChangeMinStakeTx(parsed, ownerCapId);
                     executeTx(tx, "Min stake updated!");
                   }}
                   disabled={isPending || !minStake}
@@ -386,7 +497,12 @@ export function AdminPanel() {
                 </div>
                 <button
                   onClick={() => {
-                    const tx = buildChangeMaxStakePerEpochTx(parseIota(maxStakePerEpoch), ownerCapId);
+                    const parsed = safeParseIota(maxStakePerEpoch);
+                    if (!parsed) {
+                      setTxStatus({ type: "error", message: "Invalid amount. Use format: 50000000" });
+                      return;
+                    }
+                    const tx = buildChangeMaxStakePerEpochTx(parsed, ownerCapId);
                     executeTx(tx, "Max stake per epoch updated!");
                   }}
                   disabled={isPending || !maxStakePerEpoch}
@@ -423,11 +539,16 @@ export function AdminPanel() {
                 />
                 <button
                   onClick={() => {
+                    if (!isValidIotaAddress(feeRecipient)) {
+                      setTxStatus({ type: "error", message: "Invalid IOTA address format (0x + 64 hex chars)" });
+                      return;
+                    }
                     const tx = buildCollectFeeTx(feeRecipient, ownerCapId);
                     executeTx(tx, "Fees collected!");
                   }}
-                  disabled={isPending || !feeRecipient}
+                  disabled={isPending || !feeRecipient || (poolState?.collectableFee ?? 0n) <= 0n}
                   className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg transition-colors"
+                  title={(poolState?.collectableFee ?? 0n) <= 0n ? "No fees available to collect" : ""}
                 >
                   Collect
                 </button>
@@ -484,9 +605,18 @@ export function AdminPanel() {
                 </div>
                 <button
                   onClick={() => {
+                    if (!isValidIotaAddress(newValidatorAddress)) {
+                      setTxStatus({ type: "error", message: "Invalid validator address format (0x + 64 hex chars)" });
+                      return;
+                    }
+                    const priority = safeParseInt(newValidatorPriority, 0, 255);
+                    if (priority === null) {
+                      setTxStatus({ type: "error", message: "Priority must be a number between 0 and 255" });
+                      return;
+                    }
                     const tx = buildUpdateValidatorsTx(
                       [newValidatorAddress],
-                      [parseInt(newValidatorPriority)],
+                      [priority],
                       operatorCapId
                     );
                     executeTx(tx, "Validator updated!");
@@ -533,7 +663,12 @@ export function AdminPanel() {
                 </div>
                 <button
                   onClick={() => {
-                    const tx = buildUpdateRewardsTx(parseIota(rewardsValue), operatorCapId);
+                    const parsed = safeParseIota(rewardsValue);
+                    if (!parsed) {
+                      setTxStatus({ type: "error", message: "Invalid rewards amount. Use format: 1.5" });
+                      return;
+                    }
+                    const tx = buildUpdateRewardsTx(parsed, operatorCapId);
                     executeTx(tx, "Rewards updated!");
                   }}
                   disabled={isPending || !rewardsValue}
@@ -671,8 +806,13 @@ export function AdminPanel() {
                         </div>
                         <button
                           onClick={() => {
-                            const basisPoints = Math.round(parseFloat(rewardFee) * 100);
-                            if (confirm(`Are you sure you want to change the protocol fee to ${rewardFee}%?`)) {
+                            const percent = safeParsePercent(rewardFee);
+                            if (percent === null) {
+                              setTxStatus({ type: "error", message: "Invalid percentage. Enter a value between 0 and 100" });
+                              return;
+                            }
+                            const basisPoints = Math.round(percent * 100);
+                            if (confirm(`Are you sure you want to change the protocol fee to ${percent}%?`)) {
                               const tx = buildChangeRewardFeeTx(basisPoints, ownerCapId);
                               executeTx(tx, "Protocol fee updated!");
                             }
@@ -717,8 +857,13 @@ export function AdminPanel() {
                         </div>
                         <button
                           onClick={() => {
-                            const basisPoints = Math.round(parseFloat(threshold) * 100);
-                            if (confirm(`Are you sure you want to change the rewards threshold to ${threshold}%?`)) {
+                            const percent = safeParsePercent(threshold);
+                            if (percent === null) {
+                              setTxStatus({ type: "error", message: "Invalid percentage. Enter a value between 0 and 100" });
+                              return;
+                            }
+                            const basisPoints = Math.round(percent * 100);
+                            if (confirm(`Are you sure you want to change the rewards threshold to ${percent}%?`)) {
                               const tx = buildUpdateThresholdTx(basisPoints, ownerCapId);
                               executeTx(tx, "Threshold updated!");
                             }
@@ -758,6 +903,10 @@ export function AdminPanel() {
                         />
                         <button
                           onClick={() => {
+                            if (!isValidIotaAddress(newOwnerAddress)) {
+                              setTxStatus({ type: "error", message: "Invalid IOTA address format (0x + 64 hex chars)" });
+                              return;
+                            }
                             if (confirm(`Are you sure you want to transfer Owner Cap to ${newOwnerAddress}? This action is IRREVERSIBLE.`)) {
                               const tx = buildTransferOwnerCapTx(newOwnerAddress, ownerCapId);
                               executeTx(tx, "Owner Cap transferred!");
@@ -795,6 +944,10 @@ export function AdminPanel() {
                         />
                         <button
                           onClick={() => {
+                            if (!isValidIotaAddress(newOperatorAddress)) {
+                              setTxStatus({ type: "error", message: "Invalid IOTA address format (0x + 64 hex chars)" });
+                              return;
+                            }
                             if (confirm(`Are you sure you want to transfer Operator Cap to ${newOperatorAddress}? This action is IRREVERSIBLE.`)) {
                               const tx = buildTransferOperatorCapTx(newOperatorAddress, operatorCapId);
                               executeTx(tx, "Operator Cap transferred!");

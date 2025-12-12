@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   useStakeHistory,
   useValidatorVaults,
@@ -12,12 +12,51 @@ import {
 import { useValidators } from "@/hooks/useValidators";
 import { usePoolData } from "@/hooks/usePoolData";
 import { formatIota, truncateAddress } from "@/lib/utils";
-// Note: DEFAULT_VALIDATORS removed - now using systemValidators for names
 
-// Alias for clarity
 const shortenAddress = truncateAddress;
 
 type TabType = "overview" | "vaults" | "events";
+
+// Search input component
+function SearchInput({
+  value,
+  onChange,
+  placeholder
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+      />
+      {value && (
+        <button
+          onClick={() => onChange("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function StakeHistoryPanel() {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
@@ -34,7 +73,6 @@ export function StakeHistoryPanel() {
     refetchRewards();
   };
 
-  // Get validator name from system validators
   const getValidatorName = (address: string): string => {
     const found = systemValidators.find(
       (v) => v.address.toLowerCase() === address.toLowerCase()
@@ -59,21 +97,21 @@ export function StakeHistoryPanel() {
 
       {/* Current Epoch Info */}
       <div className="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-4 text-sm flex-wrap">
           <div>
-            <span className="text-gray-400">Current Epoch:</span>{" "}
+            <span className="text-gray-400">Epoch:</span>{" "}
             <span className="text-white font-mono">{epochInfo.currentEpoch}</span>
           </div>
-          <div className="text-gray-500">|</div>
+          <div className="text-gray-600">•</div>
           <div>
             <span className="text-gray-400">Duration:</span>{" "}
             <span className="text-white font-mono">
               {epochInfo.epochDurationMs ? `${(epochInfo.epochDurationMs / 3600000).toFixed(1)}h` : "-"}
             </span>
           </div>
-          <div className="text-gray-500">|</div>
+          <div className="text-gray-600">•</div>
           <div>
-            <span className="text-gray-400">Reported Rewards:</span>{" "}
+            <span className="text-gray-400">Reported:</span>{" "}
             <span className="text-green-400 font-mono">
               {poolState ? formatIota(poolState.totalRewards) : "..."} IOTA
             </span>
@@ -101,7 +139,7 @@ export function StakeHistoryPanel() {
               : "bg-gray-700 text-gray-300 hover:bg-gray-600"
           }`}
         >
-          Validator Vaults ({vaults.length})
+          Vaults ({vaults.length})
         </button>
         <button
           onClick={() => setActiveTab("events")}
@@ -111,7 +149,7 @@ export function StakeHistoryPanel() {
               : "bg-gray-700 text-gray-300 hover:bg-gray-600"
           }`}
         >
-          Event History ({events.length})
+          Events ({events.length})
         </button>
       </div>
 
@@ -138,7 +176,7 @@ export function StakeHistoryPanel() {
   );
 }
 
-// Rewards Overview Tab - Shows REAL rewards calculated from EXCHANGE RATES
+// Rewards Overview Tab
 function RewardsOverviewTab({
   rewardsInfo,
   isLoading,
@@ -153,6 +191,19 @@ function RewardsOverviewTab({
   getValidatorName: (address: string) => string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredValidators = useMemo(() => {
+    if (!rewardsInfo) return [];
+    if (!searchQuery.trim()) return rewardsInfo.validatorBreakdown;
+
+    const query = searchQuery.toLowerCase();
+    return rewardsInfo.validatorBreakdown.filter((v) => {
+      const name = (v.validatorName || getValidatorName(v.validatorAddress)).toLowerCase();
+      const address = v.validatorAddress.toLowerCase();
+      return name.includes(query) || address.includes(query);
+    });
+  }, [rewardsInfo, searchQuery, getValidatorName]);
 
   if (isLoading) {
     return (
@@ -179,176 +230,168 @@ function RewardsOverviewTab({
 
   const rewardsDelta = rewardsInfo.totalRewards - reportedRewards;
   const needsUpdate = rewardsDelta > 0n;
-
-  // Count totals
   const totalActiveStakes = rewardsInfo.validatorBreakdown.reduce((sum, v) => sum + v.activeStakes, 0);
   const totalPendingStakes = rewardsInfo.validatorBreakdown.reduce((sum, v) => sum + v.pendingStakes, 0);
 
   return (
     <div className="space-y-4">
-      {/* Calculation Method Badge */}
-      <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🔐</span>
-          <div>
-            <span className="text-emerald-400 font-medium text-sm">Calculation: Exchange Rates</span>
-            <p className="text-xs text-gray-400">
-              Rewards calculated from on-chain pool exchange rates (NOT estimated, NOT APY-based)
-            </p>
-          </div>
-        </div>
-        <div className="text-xs text-gray-500">
-          Epoch {rewardsInfo.currentEpoch}
-        </div>
-      </div>
-
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Total Principal */}
-        <div className="bg-gray-900/50 rounded-lg border border-gray-700 p-4">
-          <div className="text-gray-400 text-sm mb-1">Total Principal Staked</div>
-          <div className="text-2xl font-bold text-white font-mono">
+      {/* Stats Grid - More Compact */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-gray-900/50 rounded-lg border border-gray-700 p-3">
+          <div className="text-gray-400 text-xs mb-1">Principal</div>
+          <div className="text-lg font-bold text-white font-mono">
             {formatIota(rewardsInfo.totalPrincipal)}
           </div>
-          <div className="text-xs text-gray-500">IOTA</div>
         </div>
-
-        {/* REAL Rewards */}
-        <div className="bg-gray-900/50 rounded-lg border border-green-500/50 p-4">
-          <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            Real Rewards (Exchange Rate)
+        <div className="bg-gray-900/50 rounded-lg border border-green-500/30 p-3">
+          <div className="flex items-center gap-1 text-gray-400 text-xs mb-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            Real Rewards
           </div>
-          <div className="text-2xl font-bold text-green-400 font-mono">
+          <div className="text-lg font-bold text-green-400 font-mono">
             {formatIota(rewardsInfo.totalRewards)}
           </div>
-          <div className="text-xs text-gray-500">IOTA • From pool exchange rates</div>
         </div>
-
-        {/* Total Value */}
-        <div className="bg-gray-900/50 rounded-lg border border-blue-700/50 p-4">
-          <div className="text-gray-400 text-sm mb-1">Total Value (TVL)</div>
-          <div className="text-2xl font-bold text-blue-400 font-mono">
+        <div className="bg-gray-900/50 rounded-lg border border-blue-500/30 p-3">
+          <div className="text-gray-400 text-xs mb-1">Total Value</div>
+          <div className="text-lg font-bold text-blue-400 font-mono">
             {formatIota(rewardsInfo.totalValue)}
           </div>
-          <div className="text-xs text-gray-500">IOTA • Principal + Rewards</div>
         </div>
       </div>
 
-      {/* Stakes Status Bar */}
-      <div className="flex items-center gap-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-400" />
-          <span className="text-sm text-gray-400">Active Stakes:</span>
-          <span className="text-sm font-mono text-green-400">{totalActiveStakes}</span>
+      {/* Compact Status Bar */}
+      <div className="flex items-center justify-between p-2 bg-gray-900/50 rounded-lg border border-gray-700 text-xs">
+        <div className="flex items-center gap-4">
+          <span className="text-gray-400">
+            <span className="text-green-400 font-mono">{totalActiveStakes}</span> active
+          </span>
+          <span className="text-gray-400">
+            <span className="text-amber-400 font-mono">{totalPendingStakes}</span> pending
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-amber-400" />
-          <span className="text-sm text-gray-400">Pending:</span>
-          <span className="text-sm font-mono text-amber-400">{totalPendingStakes}</span>
-        </div>
-        <div className="text-xs text-gray-500 ml-auto">
-          Formula: reward = principal × (current_rate / deposit_rate) - principal
-        </div>
+        <span className="text-gray-500">Exchange Rate Method • Epoch {rewardsInfo.currentEpoch}</span>
       </div>
 
-      {/* Rewards Report Helper */}
-      <div className={`p-4 rounded-lg border ${needsUpdate ? "bg-amber-500/10 border-amber-500/30" : "bg-green-500/10 border-green-500/30"}`}>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">{needsUpdate ? "⚠️" : "✅"}</span>
-              <span className="font-medium text-white">
-                {needsUpdate ? "Rewards Update Required" : "Rewards Up to Date"}
-              </span>
-            </div>
-            <div className="text-sm space-y-1">
-              <div>
-                <span className="text-gray-400">Currently Reported:</span>{" "}
-                <span className="text-white font-mono">{formatIota(reportedRewards)} IOTA</span>
+      {/* Rewards Report - Compact */}
+      <div className={`p-3 rounded-lg border ${needsUpdate ? "bg-amber-500/10 border-amber-500/30" : "bg-green-500/10 border-green-500/30"}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">{needsUpdate ? "⚠️" : "✅"}</span>
+            <div className="text-sm">
+              <div className="flex items-center gap-4">
+                <span className="text-gray-400">Reported: <span className="text-white font-mono">{formatIota(reportedRewards)}</span></span>
+                <span className="text-gray-400">Real: <span className="text-green-400 font-mono">{formatIota(rewardsInfo.totalRewards)}</span></span>
+                {needsUpdate && (
+                  <span className="text-amber-400 font-mono">+{formatIota(rewardsDelta)}</span>
+                )}
               </div>
-              <div>
-                <span className="text-gray-400">Real Rewards (Exchange Rates):</span>{" "}
-                <span className="text-green-400 font-mono">{formatIota(rewardsInfo.totalRewards)} IOTA</span>
-              </div>
-              {needsUpdate && (
-                <div>
-                  <span className="text-gray-400">Difference:</span>{" "}
-                  <span className="text-amber-400 font-mono">+{formatIota(rewardsDelta)} IOTA</span>
-                </div>
-              )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              🔐 Calculated using <strong>pool exchange rates</strong> from the blockchain.
-              This is the exact value you would receive if you unstaked now.
-            </p>
           </div>
           <button
             onClick={handleCopyRewards}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              copied
-                ? "bg-green-600 text-white"
-                : "bg-gray-700 hover:bg-gray-600 text-white"
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              copied ? "bg-green-600 text-white" : "bg-gray-700 hover:bg-gray-600 text-white"
             }`}
           >
-            {copied ? "Copied!" : "Copy Value"}
+            {copied ? "Copied!" : "Copy"}
           </button>
         </div>
       </div>
 
-      {/* Per-Validator Breakdown */}
+      {/* Validators Table - Compact with Search */}
       <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
-        <div className="p-3 border-b border-gray-700 bg-gray-800/50 flex items-center justify-between">
-          <span className="font-medium text-white">Rewards by Validator (Exchange Rate Method)</span>
+        <div className="p-3 border-b border-gray-700 bg-gray-800/50 flex items-center justify-between gap-4">
+          <span className="font-medium text-white text-sm whitespace-nowrap">
+            Rewards by Validator ({rewardsInfo.validatorBreakdown.length})
+          </span>
+          <div className="flex-1 max-w-xs">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search validator..."
+            />
+          </div>
         </div>
-        <div className="divide-y divide-gray-700/50">
-          {rewardsInfo.validatorBreakdown.map((v) => (
-            <div key={v.validatorAddress} className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
+
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-gray-800/30 text-xs text-gray-400 border-b border-gray-700/50">
+          <div className="col-span-5">Validator</div>
+          <div className="col-span-2 text-right">Principal</div>
+          <div className="col-span-2 text-right">Rewards</div>
+          <div className="col-span-2 text-right">Value</div>
+          <div className="col-span-1 text-center">Stakes</div>
+        </div>
+
+        {/* Table Body */}
+        <div className="max-h-64 overflow-y-auto">
+          {filteredValidators.length === 0 ? (
+            <div className="text-center py-4 text-gray-500 text-sm">
+              {searchQuery ? "No validators match your search" : "No validators"}
+            </div>
+          ) : (
+            filteredValidators.map((v) => (
+              <div
+                key={v.validatorAddress}
+                className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-gray-700/30 hover:bg-gray-800/30 transition-colors items-center text-sm"
+              >
+                {/* Validator */}
+                <div className="col-span-5 flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                     {(v.validatorName || getValidatorName(v.validatorAddress))[0]}
                   </div>
-                  <div>
-                    <div className="text-white font-medium">
+                  <div className="min-w-0">
+                    <div className="text-white font-medium truncate text-xs">
                       {v.validatorName || getValidatorName(v.validatorAddress)}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {v.activeStakes} active, {v.pendingStakes} pending • Since epoch {v.stakeActivationEpoch}
+                    <div className="text-[10px] text-gray-500 font-mono truncate">
+                      {shortenAddress(v.validatorAddress)}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-white font-mono">{formatIota(v.principal)} IOTA</div>
-                  <div className="text-xs text-green-400 font-mono">+{formatIota(v.rewards)} rewards</div>
+                {/* Principal */}
+                <div className="col-span-2 text-right font-mono text-white text-xs">
+                  {formatIota(v.principal)}
+                </div>
+                {/* Rewards */}
+                <div className="col-span-2 text-right font-mono text-green-400 text-xs">
+                  +{formatIota(v.rewards)}
+                </div>
+                {/* Value */}
+                <div className="col-span-2 text-right font-mono text-blue-400 text-xs">
+                  {formatIota(v.currentValue)}
+                </div>
+                {/* Stakes */}
+                <div className="col-span-1 text-center">
+                  <span className="inline-flex items-center gap-1 text-[10px]">
+                    <span className="text-green-400">{v.activeStakes}</span>
+                    <span className="text-gray-600">/</span>
+                    <span className="text-amber-400">{v.pendingStakes}</span>
+                  </span>
                 </div>
               </div>
-              {/* Exchange Rate Info */}
-              <div className="mt-2 pt-2 border-t border-gray-700/30 flex items-center gap-4 text-xs text-gray-500">
-                <span>Exchange Rate: {v.currentExchangeRate?.toFixed(6) || "N/A"}</span>
-                <span>•</span>
-                <span>Current Value: {formatIota(v.currentValue)} IOTA</span>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
-      {/* Explanation Box */}
-      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm">
-        <div className="font-medium text-blue-300 mb-2">🔐 How Exchange Rate Calculation Works</div>
-        <ul className="text-gray-400 space-y-1 list-disc list-inside">
-          <li>Each validator pool has an <strong>exchange rate</strong> (IOTA/pool_token) that increases over time</li>
-          <li><strong>Formula:</strong> reward = principal × (current_rate / deposit_rate) - principal</li>
-          <li>This gives the <strong>exact reward</strong> you would receive if you unstaked now</li>
-          <li>NOT based on APY estimates - this is the <strong>real on-chain value</strong></li>
-          <li>Stakes must be "Active" (1 epoch after staking) to start earning</li>
-        </ul>
-      </div>
+      {/* Info Box - Collapsed */}
+      <details className="bg-blue-500/10 border border-blue-500/20 rounded-lg">
+        <summary className="p-3 text-sm font-medium text-blue-300 cursor-pointer hover:bg-blue-500/5">
+          🔐 How Exchange Rate Calculation Works
+        </summary>
+        <div className="px-3 pb-3 text-xs text-gray-400 space-y-1">
+          <p>• Each validator pool has an <strong>exchange rate</strong> that increases over time</p>
+          <p>• <strong>Formula:</strong> reward = principal × (current_rate / deposit_rate) - principal</p>
+          <p>• This is the <strong>exact value</strong> you would receive if you unstaked now</p>
+          <p>• Stakes must be "Active" (1 epoch after staking) to start earning</p>
+        </div>
+      </details>
     </div>
   );
 }
 
+// Vaults Tab
 function VaultsTab({
   vaults,
   isLoading,
@@ -361,6 +404,18 @@ function VaultsTab({
   getValidatorName: (address: string) => string;
 }) {
   const [expandedVault, setExpandedVault] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredVaults = useMemo(() => {
+    if (!searchQuery.trim()) return vaults;
+
+    const query = searchQuery.toLowerCase();
+    return vaults.filter((v) => {
+      const name = getValidatorName(v.address).toLowerCase();
+      const address = v.address.toLowerCase();
+      return name.includes(query) || address.includes(query);
+    });
+  }, [vaults, searchQuery, getValidatorName]);
 
   if (isLoading) {
     return (
@@ -380,154 +435,119 @@ function VaultsTab({
 
   return (
     <div className="space-y-3">
-      {vaults.map((vault) => (
-        <div
-          key={vault.address}
-          className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden"
-        >
-          {/* Vault Header */}
-          <button
-            onClick={() => setExpandedVault(expandedVault === vault.address ? null : vault.address)}
-            className="w-full p-4 flex items-center justify-between hover:bg-gray-800/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">
-                {getValidatorName(vault.address)[0]}
-              </div>
-              <div className="text-left">
-                <div className="text-white font-medium">{getValidatorName(vault.address)}</div>
-                <div className="text-xs text-gray-500 font-mono">{shortenAddress(vault.address)}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-white font-mono">{formatIota(vault.totalStaked)} IOTA</div>
-                <div className="text-xs text-gray-400">{vault.stakes.length} stake(s)</div>
-              </div>
-              <span className="text-gray-400">{expandedVault === vault.address ? "▲" : "▼"}</span>
-            </div>
-          </button>
+      {/* Search */}
+      <SearchInput
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search by validator name or address..."
+      />
 
-          {/* Vault Details */}
-          {expandedVault === vault.address && (
-            <div className="border-t border-gray-700 p-4 space-y-3">
-              {/* Epoch Info */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-400">Last Stake Epoch:</span>{" "}
-                  <span className="text-white font-mono">{vault.stakeEpoch}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Staked This Epoch:</span>{" "}
-                  <span className="text-white font-mono">
-                    {vault.stakeEpoch === currentEpoch ? formatIota(vault.stakedInEpoch) : "0"} IOTA
-                  </span>
-                </div>
-              </div>
-
-              {/* Stakes Table */}
-              {vault.stakes.length > 0 ? (
-                <div className="mt-4">
-                  <div className="text-sm text-gray-300 mb-2 font-medium">Individual Stakes:</div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-gray-400 text-left">
-                          <th className="pb-2">#</th>
-                          <th className="pb-2">Principal</th>
-                          <th className="pb-2">Activation Epoch</th>
-                          <th className="pb-2">Rewards Start</th>
-                          <th className="pb-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {vault.stakes.map((stake, idx) => {
-                          const isEarning = currentEpoch >= stake.rewardsStartEpoch;
-                          const isPending = currentEpoch === stake.activationEpoch;
-
-                          return (
-                            <tr key={stake.objectId} className="border-t border-gray-700/50">
-                              <td className="py-2 text-gray-500">{idx + 1}</td>
-                              <td className="py-2 text-white font-mono">
-                                {formatIota(stake.principal)} IOTA
-                              </td>
-                              <td className="py-2 font-mono text-gray-300">
-                                {stake.activationEpoch}
-                              </td>
-                              <td className="py-2 font-mono text-gray-300">
-                                {stake.rewardsStartEpoch}
-                              </td>
-                              <td className="py-2">
-                                {isEarning ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                    Earning
-                                  </span>
-                                ) : isPending ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                                    Activating
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                    Pending
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+      {/* Vaults List */}
+      <div className="space-y-2">
+        {filteredVaults.length === 0 ? (
+          <div className="text-center py-4 text-gray-500 text-sm">
+            No validators match your search
+          </div>
+        ) : (
+          filteredVaults.map((vault) => (
+            <div
+              key={vault.address}
+              className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden"
+            >
+              {/* Vault Header */}
+              <button
+                onClick={() => setExpandedVault(expandedVault === vault.address ? null : vault.address)}
+                className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs">
+                    {getValidatorName(vault.address)[0]}
+                  </div>
+                  <div className="text-left">
+                    <div className="text-white font-medium text-sm">{getValidatorName(vault.address)}</div>
+                    <div className="text-[10px] text-gray-500 font-mono">{shortenAddress(vault.address)}</div>
                   </div>
                 </div>
-              ) : (
-                <div className="text-gray-500 text-sm mt-2">No individual stakes found in vault.</div>
-              )}
-
-              {/* Summary */}
-              {vault.stakes.length > 0 && (
-                <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
-                  <div className="flex items-center gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-400">Earning:</span>{" "}
-                      <span className="text-green-400 font-mono">
-                        {vault.stakes.filter((s) => currentEpoch >= s.rewardsStartEpoch).length}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Pending:</span>{" "}
-                      <span className="text-amber-400 font-mono">
-                        {vault.stakes.filter((s) => currentEpoch < s.rewardsStartEpoch).length}
-                      </span>
-                    </div>
-                    {vault.stakes.some((s) => currentEpoch < s.rewardsStartEpoch) && (
-                      <div className="text-gray-400 text-xs">
-                        (Next rewards start in epoch {Math.min(...vault.stakes.filter((s) => currentEpoch < s.rewardsStartEpoch).map((s) => s.rewardsStartEpoch))})
-                      </div>
-                    )}
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-white font-mono text-sm">{formatIota(vault.totalStaked)} IOTA</div>
+                    <div className="text-[10px] text-gray-400">{vault.stakes.length} stake(s)</div>
                   </div>
+                  <span className="text-gray-400 text-xs">{expandedVault === vault.address ? "▲" : "▼"}</span>
+                </div>
+              </button>
+
+              {/* Vault Details */}
+              {expandedVault === vault.address && (
+                <div className="border-t border-gray-700 p-3 space-y-2">
+                  <div className="flex gap-4 text-xs text-gray-400">
+                    <span>Last Stake: <span className="text-white font-mono">Epoch {vault.stakeEpoch}</span></span>
+                    <span>This Epoch: <span className="text-white font-mono">{vault.stakeEpoch === currentEpoch ? formatIota(vault.stakedInEpoch) : "0"} IOTA</span></span>
+                  </div>
+
+                  {vault.stakes.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-400 text-left">
+                            <th className="pb-1">#</th>
+                            <th className="pb-1">Principal</th>
+                            <th className="pb-1">Activation</th>
+                            <th className="pb-1">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vault.stakes.map((stake, idx) => {
+                            const isEarning = currentEpoch >= stake.rewardsStartEpoch;
+                            const isPending = currentEpoch === stake.activationEpoch;
+
+                            return (
+                              <tr key={stake.objectId} className="border-t border-gray-700/50">
+                                <td className="py-1 text-gray-500">{idx + 1}</td>
+                                <td className="py-1 text-white font-mono">{formatIota(stake.principal)}</td>
+                                <td className="py-1 font-mono text-gray-300">{stake.activationEpoch}</td>
+                                <td className="py-1">
+                                  {isEarning ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                                      <span className="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
+                                      Earning
+                                    </span>
+                                  ) : isPending ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                                      Activating
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                                      Pending
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      ))}
+          ))
+        )}
+      </div>
 
-      {/* Total Summary */}
-      <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-300">Total Staked Across All Validators:</span>
-          <span className="text-white font-mono text-lg">
-            {formatIota(vaults.reduce((sum, v) => sum + v.totalStaked, 0n))} IOTA
-          </span>
-        </div>
+      {/* Total */}
+      <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-between text-sm">
+        <span className="text-gray-300">Total Staked:</span>
+        <span className="text-white font-mono">
+          {formatIota(vaults.reduce((sum, v) => sum + v.totalStaked, 0n))} IOTA
+        </span>
       </div>
     </div>
   );
 }
 
+// Events Tab
 function EventsTab({
   events,
   isLoading,
@@ -548,36 +568,25 @@ function EventsTab({
   if (events.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
-        No stake events found. Events will appear here as users stake and unstake.
+        No stake events found.
       </div>
     );
   }
 
   const getEventIcon = (type: StakeHistoryEvent["type"]) => {
     switch (type) {
-      case "stake":
-        return "🟢";
-      case "stake_to_validators":
-        return "🎯";
-      case "unstake":
-        return "🔴";
+      case "stake": return "🟢";
+      case "stake_to_validators": return "🎯";
+      case "unstake": return "🔴";
     }
   };
 
   const getEventLabel = (type: StakeHistoryEvent["type"]) => {
     switch (type) {
-      case "stake":
-        return "Auto Stake";
-      case "stake_to_validators":
-        return "Manual Stake";
-      case "unstake":
-        return "Unstake";
+      case "stake": return "Auto";
+      case "stake_to_validators": return "Manual";
+      case "unstake": return "Unstake";
     }
-  };
-
-  const formatTimestamp = (ts: number) => {
-    if (!ts) return "-";
-    return new Date(ts).toLocaleString();
   };
 
   return (
@@ -585,74 +594,36 @@ function EventsTab({
       {events.map((event, idx) => (
         <div
           key={`${event.txDigest}-${idx}`}
-          className="bg-gray-900/50 rounded-lg border border-gray-700 p-4"
+          className="bg-gray-900/50 rounded-lg border border-gray-700 p-3"
         >
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">{getEventIcon(event.type)}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{getEventIcon(event.type)}</span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{getEventLabel(event.type)}</span>
-                  <span className="text-xs text-gray-500">{formatTimestamp(event.timestamp)}</span>
+                  <span className="text-white font-medium text-sm">{getEventLabel(event.type)}</span>
+                  <span className="text-[10px] text-gray-500">
+                    {event.timestamp ? new Date(event.timestamp).toLocaleDateString() : "-"}
+                  </span>
                 </div>
-                <div className="text-sm text-gray-400 mt-1">
-                  Staker: <span className="font-mono">{shortenAddress(event.staker)}</span>
-                </div>
-                {event.validators && event.validators.length > 0 && (
-                  <div className="text-sm text-gray-400 mt-1">
-                    Validators: {event.validators.map(getValidatorName).join(", ")}
-                  </div>
-                )}
+                <div className="text-[10px] text-gray-500 font-mono">{shortenAddress(event.staker)}</div>
               </div>
             </div>
             <div className="text-right">
-              <div className={`font-mono ${event.type === "unstake" ? "text-red-400" : "text-green-400"}`}>
-                {event.type === "unstake" ? "-" : "+"}{formatIota(event.iotaAmount)} IOTA
+              <div className={`font-mono text-sm ${event.type === "unstake" ? "text-red-400" : "text-green-400"}`}>
+                {event.type === "unstake" ? "-" : "+"}{formatIota(event.iotaAmount)}
               </div>
-              <div className="text-xs text-gray-500 font-mono mt-1">
-                {formatIota(event.certAmount)} tIOTA
-              </div>
+              <div className="text-[10px] text-gray-500 font-mono">{formatIota(event.certAmount)} tIOTA</div>
             </div>
-          </div>
-          <div className="mt-2 pt-2 border-t border-gray-700/50">
-            <a
-              href={`https://explorer.iota.org/testnet/txblock/${event.txDigest}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 font-mono"
-            >
-              {shortenAddress(event.txDigest)} ↗
-            </a>
           </div>
         </div>
       ))}
 
-      {/* Summary */}
-      <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Total Stakes:</span>{" "}
-            <span className="text-green-400 font-mono">
-              {events.filter((e) => e.type !== "unstake").length}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-400">Total Unstakes:</span>{" "}
-            <span className="text-red-400 font-mono">
-              {events.filter((e) => e.type === "unstake").length}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-400">Net Staked:</span>{" "}
-            <span className="text-white font-mono">
-              {formatIota(
-                events.reduce(
-                  (sum, e) => sum + (e.type === "unstake" ? -e.iotaAmount : e.iotaAmount),
-                  0n
-                )
-              )} IOTA
-            </span>
-          </div>
+      <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+        <div className="flex justify-between text-xs">
+          <span className="text-gray-400">Stakes: <span className="text-green-400 font-mono">{events.filter((e) => e.type !== "unstake").length}</span></span>
+          <span className="text-gray-400">Unstakes: <span className="text-red-400 font-mono">{events.filter((e) => e.type === "unstake").length}</span></span>
+          <span className="text-gray-400">Net: <span className="text-white font-mono">{formatIota(events.reduce((sum, e) => sum + (e.type === "unstake" ? -e.iotaAmount : e.iotaAmount), 0n))}</span></span>
         </div>
       </div>
     </div>
