@@ -36,6 +36,7 @@ module tokenlabs_liquid_stake::native_pool {
     const E_NOT_ENOUGH_BALANCE: u64 = 110;
     const E_REWARDS_TOO_HIGH: u64 = 111;
     const E_NO_VALIDATORS: u64 = 112;       // Empty validators vector in stake_to_validators
+    const E_EPOCH_LIMIT_EXCEEDED: u64 = 113; // Validator has reached max stake for this epoch
 
     /* Events */
     public struct StakedEvent has copy, drop {
@@ -244,7 +245,13 @@ module tokenlabs_liquid_stake::native_pool {
 
         let reward_diff = self.total_rewards - value;
         let reward_fee = calculate_reward_fee(self, reward_diff);
-        self.collected_rewards = self.collected_rewards - reward_fee;
+
+        // FIX #2: Protect against underflow when reverting rewards
+        if (reward_fee > self.collected_rewards) {
+            self.collected_rewards = 0;
+        } else {
+            self.collected_rewards = self.collected_rewards - reward_fee;
+        };
 
         set_rewards_unsafe(self, value);
     }
@@ -367,10 +374,16 @@ module tokenlabs_liquid_stake::native_pool {
         // Convert coin to balance for splitting
         let mut coin_balance = coin::into_balance(coin);
         let mut j = 0;
+        let current_epoch = tx_context::epoch(ctx);
 
         // Stake to each validator equally
         while (j < len) {
             let validator = *vector::borrow(&validators, j);
+
+            // FIX #1: Enforce max_validator_stake_per_epoch limit (same as stake_pool)
+            let staked_in_epoch = validator_set::get_staked_in_epoch(&self.validator_set, validator, current_epoch);
+            assert!(staked_in_epoch + per_amount <= self.max_validator_stake_per_epoch, E_EPOCH_LIMIT_EXCEEDED);
+
             let stake_balance = balance::split(&mut coin_balance, per_amount);
             let stake_coin = coin::from_balance(stake_balance, ctx);
 
